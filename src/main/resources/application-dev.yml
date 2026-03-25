@@ -1,0 +1,138 @@
+---
+# Development Environment Configuration
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/xindai?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: root
+    password: chen
+    # Database connection pool (HikariCP)
+    hikari:
+      minimum-idle: 5
+      maximum-pool-size: 20
+      idle-timeout: 30000
+      pool-name: XindaiHikariCP
+      max-lifetime: 1800000
+      connection-timeout: 30000
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      database: 0
+      timeout: 10000ms
+      # Redis caching optimization
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+          max-wait: -1ms
+
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
+# JWT 配置 (dev)
+jwt:
+  secret: xindai-dev-secret-key-for-jwt-token-generation-must-be-at-least-256-bits
+  expiration: 7200000  # 2小时
+
+# Knife4j 配置 (dev - swagger enabled)
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+  api-docs:
+    path: /v3/api-docs
+  group-configs:
+    - group: 'default'
+      paths-to-match: '/**'
+      packages-to-scan: com.xindai.xindai
+
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn
+
+# Actuator Configuration (dev)
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when_authorized
+    metrics:
+      enabled: true
+  metrics:
+    tags:
+      application: xindai
+
+# Logging (dev)
+logging:
+  level:
+    com.xindai: INFO
+    com.xindai.xindai.modules.risk: DEBUG
+    org.springframework.security: info
+    com.zaxxer.hikari: INFO
+    org.springframework.data.redis: INFO
+
+# CORS 配置 (dev - localhost origins)
+cors:
+  allowed-origins: http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173
+  allowed-methods: GET,POST,PUT,DELETE,OPTIONS
+  allowed-headers: "*"
+  allow-credentials: true
+  max-age: 3600
+
+# 模型服务配置 (dev - localhost)
+model:
+  service:
+    url: http://localhost:8000
+    timeout: 5000
+
+# 第三方数据服务配置 (dev - all disabled with placeholder defaults)
+third-party:
+  credit:
+    url: https://api.credit-bureau.com
+    app-id: your-credit-app-id
+    app-secret: your-credit-app-secret
+    timeout: 5000
+    enabled: false
+
+  zhima:
+    url: https://zmopenapi.zmxy.com.cn
+    app-id: your-zhima-app-id
+    private-key: your-private-key
+    public-key: zhima-public-key
+    timeout: 5000
+    enabled: false
+
+  carrier:
+    url: https://api.carrier.com
+    app-id: your-carrier-app-id
+    app-secret: your-carrier-app-secret
+    timeout: 10000
+    enabled: false
+
+  social:
+    url: https://api.social.com
+    app-id: your-social-app-id
+    app-secret: your-social-app-secret
+    timeout: 5000
+    enabled: false
+
+# AI 智能助手配置 (dev - enabled with placeholder)
+agent:
+  enabled: true
+  base-url: https://api.deepseek.com
+  api-key: sk-placeholder
+  model-name: deepseek-chat
+  temperature: 0.7
+  max-tokens: 2048
+  timeout-seconds: 60
+  memory-max-messages: 20
