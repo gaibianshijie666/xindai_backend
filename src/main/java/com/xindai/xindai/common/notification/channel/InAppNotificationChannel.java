@@ -1,21 +1,19 @@
 package com.xindai.xindai.common.notification.channel;
 
-import com.xindai.xindai.modules.notification.service.NotificationService;
-import com.xindai.xindai.modules.user.entity.User;
-import com.xindai.xindai.modules.user.mapper.UserMapper;
+import com.xindai.xindai.modules.notification.entity.Notification;
+import com.xindai.xindai.modules.notification.mapper.NotificationMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.util.Set;
+import java.time.LocalDateTime;
 
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class InAppNotificationChannel implements NotificationChannel {
 
-    private final NotificationService notificationService;
-    private final UserMapper userMapper;
+    private final NotificationMapper notificationMapper;
 
     @Override
     public boolean supports(NotificationType type) {
@@ -27,7 +25,6 @@ public class InAppNotificationChannel implements NotificationChannel {
     public void send(NotificationMessage message) {
         String userType = message.getUserType();
         if (userType == null || userType.isBlank()) {
-            // Default to borrower
             userType = "BORROWER";
         }
 
@@ -41,14 +38,16 @@ public class InAppNotificationChannel implements NotificationChannel {
             content = buildDefaultContent(message);
         }
 
-        notificationService.send(
-                message.getUserId(),
-                userType,
-                title,
-                content,
-                message.getType().getCode(),
-                message.getRelatedId()
-        );
+        Notification notification = new Notification();
+        notification.setUserId(message.getUserId());
+        notification.setUserType(userType);
+        notification.setTitle(title);
+        notification.setContent(content);
+        notification.setType(message.getType().getCode());
+        notification.setRelatedId(message.getRelatedId());
+        notification.setIsRead(0);
+        notification.setCreatedAt(LocalDateTime.now());
+        notificationMapper.insert(notification);
 
         log.info("[IN-APP] Notification saved for userId={}, type={}", message.getUserId(), message.getType());
     }

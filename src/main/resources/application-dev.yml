@@ -42,6 +42,16 @@ spring:
           min-idle: 0
           max-wait: -1ms
 
+  # 邮件配置 (dev)
+  mail:
+    host: ${MAIL_HOST:smtp.qq.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
+
 mybatis-plus:
   configuration:
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
@@ -153,17 +163,6 @@ agent:
 # 加密密钥 (dev - fixed key for development)
 encryption:
   key: eGluZGFpX2Rldl9hZXMyNTZfc2VjcmV0X2tleV8zMjA=
-
-# 邮件配置 (dev)
-spring:
-  mail:
-    host: ${MAIL_HOST:smtp.qq.com}
-    port: ${MAIL_PORT:587}
-    username: ${MAIL_USERNAME:}
-    password: ${MAIL_PASSWORD:}
-    properties:
-      mail.smtp.auth: true
-      mail.smtp.starttls.enable: true
 
 # 短信配置 (dev - mock mode)
 sms:
