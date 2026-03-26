@@ -48,6 +48,21 @@ public class RedisConfig {
      */
     private static final Duration BLACKLIST_TTL = Duration.ofHours(1);
 
+    /**
+     * 风险评估缓存过期时间：30分钟
+     */
+    private static final Duration RISK_ASSESSMENT_TTL = Duration.ofMinutes(30);
+
+    /**
+     * 仪表盘统计缓存过期时间：5分钟
+     */
+    private static final Duration DASHBOARD_STATS_TTL = Duration.ofMinutes(5);
+
+    /**
+     * 系统配置缓存过期时间：30分钟
+     */
+    private static final Duration SYSTEM_CONFIG_TTL = Duration.ofMinutes(30);
+
     @Bean
     public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory connectionFactory) {
         RedisTemplate<String, Object> template = new RedisTemplate<>();
@@ -103,6 +118,9 @@ public class RedisConfig {
         cacheConfigurations.put("creditLimit", defaultConfig.entryTtl(CREDIT_LIMIT_TTL));
         cacheConfigurations.put("userProfile", defaultConfig.entryTtl(USER_PROFILE_TTL));
         cacheConfigurations.put("blacklist", defaultConfig.entryTtl(BLACKLIST_TTL));
+        cacheConfigurations.put("riskAssessment", defaultConfig.entryTtl(RISK_ASSESSMENT_TTL));
+        cacheConfigurations.put("dashboardStats", defaultConfig.entryTtl(DASHBOARD_STATS_TTL));
+        cacheConfigurations.put("systemConfig", defaultConfig.entryTtl(SYSTEM_CONFIG_TTL));
 
         return RedisCacheManager.builder(connectionFactory)
                 .cacheDefaults(defaultConfig)

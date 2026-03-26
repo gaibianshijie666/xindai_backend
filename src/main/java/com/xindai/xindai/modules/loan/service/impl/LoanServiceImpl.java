@@ -2,6 +2,7 @@ package com.xindai.xindai.modules.loan.service.impl;
 
 import cn.hutool.core.util.IdUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.xindai.xindai.client.model.CreditLimitPredictionClient;
 import com.xindai.xindai.common.constants.CreditLimitConstants;
 import com.xindai.xindai.common.event.EventPublisher;
@@ -10,6 +11,7 @@ import com.xindai.xindai.common.event.RepaymentCompletedEvent;
 import com.xindai.xindai.common.exception.BusinessException;
 import com.xindai.xindai.common.exception.ErrorCode;
 import com.xindai.xindai.config.CreditLimitProperties;
+import com.xindai.xindai.modules.enterprise.dto.DailyLoanStats;
 import com.xindai.xindai.modules.loan.dto.*;
 import com.xindai.xindai.modules.loan.entity.CreditLimit;
 import com.xindai.xindai.modules.loan.entity.LoanApplication;
@@ -141,15 +143,20 @@ public class LoanServiceImpl implements LoanService {
     }
 
     @Override
-    public List<LoanApplicationVO> getApplications(Long userId) {
-        List<LoanApplication> applications = loanApplicationMapper.selectList(
+    public Page<LoanApplicationVO> getApplications(Long userId, int page, int size) {
+        Page<LoanApplication> applicationPage = loanApplicationMapper.selectPage(
+                new Page<>(page, size),
                 new LambdaQueryWrapper<LoanApplication>()
                         .eq(LoanApplication::getUserId, userId)
                         .orderByDesc(LoanApplication::getCreatedAt)
         );
-        return applications.stream()
+
+        Page<LoanApplicationVO> voPage = new Page<>(applicationPage.getCurrent(), applicationPage.getSize(), applicationPage.getTotal());
+        List<LoanApplicationVO> voList = applicationPage.getRecords().stream()
                 .map(this::buildLoanApplicationVO)
                 .collect(Collectors.toList());
+        voPage.setRecords(voList);
+        return voPage;
     }
 
     @Override
@@ -269,16 +276,7 @@ public class LoanServiceImpl implements LoanService {
      * 根据信用等级估算利率
      */
     private BigDecimal estimateInterestRate(String grade) {
-        return switch (grade != null ? grade.toUpperCase() : "C") {
-            case "A" -> new BigDecimal("8");
-            case "B" -> new BigDecimal("11");
-            case "C" -> new BigDecimal("14");
-            case "D" -> new BigDecimal("18");
-            case "E" -> new BigDecimal("22");
-            case "F" -> new BigDecimal("26");
-            case "G" -> new BigDecimal("30");
-            default -> new BigDecimal("15");
-        };
+        return creditLimitProperties.getInterestRate(grade);
     }
 
     /**
@@ -385,15 +383,20 @@ public class LoanServiceImpl implements LoanService {
     @Override
     public List<RepaymentPlanVO> getPendingRepayment(Long userId) {
         // 获取用户的所有合同
-        List<Long> contractIds = loanContractMapper.selectList(
+        List<LoanContract> contracts = loanContractMapper.selectList(
                 new LambdaQueryWrapper<LoanContract>()
                         .eq(LoanContract::getUserId, userId)
                         .eq(LoanContract::getStatus, ContractStatus.REPAYING.getCode()) // 进行中的合同
-        ).stream().map(LoanContract::getId).toList();
+        );
 
-        if (contractIds.isEmpty()) {
+        if (contracts.isEmpty()) {
             return List.of();
         }
+
+        List<Long> contractIds = contracts.stream().map(LoanContract::getId).toList();
+        // 批量构建合同编号映射，避免N+1查询
+        Map<Long, String> contractNoMap = contracts.stream()
+                .collect(Collectors.toMap(LoanContract::getId, LoanContract::getContractNo));
 
         // 获取待还款的还款计划
         List<RepaymentPlan> plans = repaymentPlanMapper.selectList(
@@ -417,25 +420,24 @@ public class LoanServiceImpl implements LoanService {
                 vo.setPaidAt(plan.getPaidAt().toString());
             }
 
-            // 获取合同编号
-            LoanContract contract = loanContractMapper.selectById(plan.getContractId());
-            if (contract != null) {
-                vo.setContractNo(contract.getContractNo());
-            }
+            // 使用预加载的合同编号映射
+            vo.setContractNo(contractNoMap.get(plan.getContractId()));
 
             return vo;
         }).collect(Collectors.toList());
     }
 
     @Override
-    public List<LoanContractVO> getContracts(Long userId) {
-        List<LoanContract> contracts = loanContractMapper.selectList(
+    public Page<LoanContractVO> getContracts(Long userId, int page, int size) {
+        Page<LoanContract> contractPage = loanContractMapper.selectPage(
+                new Page<>(page, size),
                 new LambdaQueryWrapper<LoanContract>()
                         .eq(LoanContract::getUserId, userId)
                         .orderByDesc(LoanContract::getCreatedAt)
         );
 
-        return contracts.stream().map(contract -> {
+        Page<LoanContractVO> voPage = new Page<>(contractPage.getCurrent(), contractPage.getSize(), contractPage.getTotal());
+        List<LoanContractVO> voList = contractPage.getRecords().stream().map(contract -> {
             LoanContractVO vo = new LoanContractVO();
             vo.setId(contract.getId());
             vo.setContractNo(contract.getContractNo());
@@ -454,6 +456,8 @@ public class LoanServiceImpl implements LoanService {
             }
             return vo;
         }).collect(Collectors.toList());
+        voPage.setRecords(voList);
+        return voPage;
     }
 
     @Override
@@ -525,7 +529,7 @@ public class LoanServiceImpl implements LoanService {
     }
 
     @Override
-    public List<RepaymentPlanVO> getAllRepaymentPlans(Long userId) {
+    public Page<RepaymentPlanVO> getAllRepaymentPlans(Long userId, int page, int size) {
         // 获取用户的所有合同
         List<LoanContract> contracts = loanContractMapper.selectList(
                 new LambdaQueryWrapper<LoanContract>()
@@ -533,20 +537,22 @@ public class LoanServiceImpl implements LoanService {
         );
 
         if (contracts.isEmpty()) {
-            return List.of();
+            return new Page<>(page, size, 0);
         }
 
         List<Long> contractIds = contracts.stream().map(LoanContract::getId).toList();
         Map<Long, String> contractNoMap = contracts.stream()
                 .collect(Collectors.toMap(LoanContract::getId, LoanContract::getContractNo));
 
-        List<RepaymentPlan> plans = repaymentPlanMapper.selectList(
+        Page<RepaymentPlan> planPage = repaymentPlanMapper.selectPage(
+                new Page<>(page, size),
                 new LambdaQueryWrapper<RepaymentPlan>()
                         .in(RepaymentPlan::getContractId, contractIds)
                         .orderByAsc(RepaymentPlan::getDueDate)
         );
 
-        return plans.stream().map(plan -> {
+        Page<RepaymentPlanVO> voPage = new Page<>(planPage.getCurrent(), planPage.getSize(), planPage.getTotal());
+        List<RepaymentPlanVO> voList = planPage.getRecords().stream().map(plan -> {
             RepaymentPlanVO vo = new RepaymentPlanVO();
             vo.setId(plan.getId());
             vo.setContractId(plan.getContractId());
@@ -562,6 +568,8 @@ public class LoanServiceImpl implements LoanService {
             }
             return vo;
         }).collect(Collectors.toList());
+        voPage.setRecords(voList);
+        return voPage;
     }
 
     @Override
@@ -1036,5 +1044,50 @@ public class LoanServiceImpl implements LoanService {
 
         UserProfile profile = getUserProfile(userId);
         return buildCreditLimitVO(limit, profile);
+    }
+
+    @Override
+    public int countApplicationsSince(LocalDateTime since) {
+        return loanApplicationMapper.selectCount(
+                new LambdaQueryWrapper<LoanApplication>()
+                        .ge(LoanApplication::getCreatedAt, since)
+        ).intValue();
+    }
+
+    @Override
+    public int countApplicationsByStatusSince(Integer status, LocalDateTime since) {
+        return loanApplicationMapper.selectCount(
+                new LambdaQueryWrapper<LoanApplication>()
+                        .eq(LoanApplication::getStatus, status)
+                        .ge(LoanApplication::getCreatedAt, since)
+        ).intValue();
+    }
+
+    @Override
+    public int countApproved() {
+        return loanApplicationMapper.countApproved();
+    }
+
+    @Override
+    public BigDecimal sumApprovedAmount() {
+        return loanApplicationMapper.sumApprovedAmount();
+    }
+
+    @Override
+    public List<DailyLoanStats> getDailyLoanStats(LocalDateTime startDate, LocalDateTime endDate) {
+        return loanApplicationMapper.getDailyLoanStats(startDate, endDate);
+    }
+
+    @Override
+    public long countAllContracts() {
+        return loanContractMapper.selectCount(new LambdaQueryWrapper<>());
+    }
+
+    @Override
+    public long countOverdueContracts() {
+        return loanContractMapper.selectCount(
+                new LambdaQueryWrapper<LoanContract>()
+                        .eq(LoanContract::getStatus, ContractStatus.OVERDUE.getCode())
+        );
     }
 }

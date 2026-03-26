@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="zh-CN">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>贷款审批拒绝</title>
+    <style>
+        body { font-family: 'Microsoft YaHei', Arial, sans-serif; background-color: #f5f7fa; margin: 0; padding: 20px; }
+        .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; }
+        .header { background-color: #ff4d4f; color: #ffffff; padding: 24px; text-align: center; }
+        .header h1 { margin: 0; font-size: 22px; }
+        .body { padding: 24px; color: #333333; line-height: 1.8; }
+        .body p { margin: 12px 0; }
+        .info-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+        .info-table td { padding: 8px 12px; border: 1px solid #e8e8e8; }
+        .info-table td:first-child { background-color: #fafafa; font-weight: bold; width: 120px; }
+        .footer { background-color: #f5f7fa; padding: 16px 24px; text-align: center; color: #999999; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>贷款审批结果通知</h1>
+        </div>
+        <div class="body">
+            <p>尊敬的用户，您好！</p>
+            <p>很抱歉，您的贷款申请未通过审批。</p>
+            <table class="info-table" th:if="${rejectReason != null}">
+                <tr>
+                    <td>拒绝原因</td>
+                    <td th:text="${rejectReason}">--</td>
+                </tr>
+            </table>
+            <p>感谢您的申请，您可以在完善资料后重新提交。</p>
+            <p>如有疑问，请联系客服。</p>
+        </div>
+        <div class="footer">
+            <p>此邮件由系统自动发送，请勿直接回复。</p>
+            <p>&copy; 2026 信袋金融科技</p>
+        </div>
+    </div>
+</body>
+</html>

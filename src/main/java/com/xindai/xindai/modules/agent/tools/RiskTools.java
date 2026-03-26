@@ -22,7 +22,7 @@ public class RiskTools {
     @Tool("查询用户的风险评估历史记录，包括风险评分、风险等级和审批决策")
     public String getRiskHistory() {
         try {
-            List<RiskAssessment> history = riskAssessmentService.getAssessmentHistory(ToolContext.getUserId());
+            List<RiskAssessment> history = riskAssessmentService.getAssessmentHistory(ToolContext.getUserId(), 1, 20).getRecords();
             if (history.isEmpty()) return "暂无风险评估记录";
             return history.stream().map(r -> String.format(
                     "评估编号: %s, 风险评分: %s, 风险等级: %s, 决策: %s, 时间: %s",

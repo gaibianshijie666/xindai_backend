@@ -1,6 +1,7 @@
 package com.xindai.xindai.modules.loan.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.xindai.xindai.client.model.CreditLimitPredictionClient;
 import com.xindai.xindai.common.exception.BusinessException;
 import com.xindai.xindai.common.exception.ErrorCode;
@@ -278,10 +279,11 @@ class LoanServiceTest {
             app1.setTerm(12);
             app1.setStatus(1);
 
-            when(applicationMapper.selectList(any(LambdaQueryWrapper.class)))
-                    .thenReturn(List.of(app1));
+            when(applicationMapper.selectPage(any(Page.class), any(LambdaQueryWrapper.class)))
+                    .thenReturn(new Page<>(1, 10, 1).setRecords(List.of(app1)));
 
-            List<LoanApplicationVO> result = loanService.getApplications(1L);
+            var resultPage = loanService.getApplications(1L, 1, 10);
+            List<LoanApplicationVO> result = resultPage.getRecords();
 
             assertNotNull(result);
             assertEquals(1, result.size());
@@ -291,10 +293,11 @@ class LoanServiceTest {
         @Test
         @DisplayName("获取申请列表 - 空列表")
         void getApplications_EmptyList() {
-            when(applicationMapper.selectList(any(LambdaQueryWrapper.class)))
-                    .thenReturn(Collections.emptyList());
+            when(applicationMapper.selectPage(any(Page.class), any(LambdaQueryWrapper.class)))
+                    .thenReturn(new Page<>(1, 10, 0).setRecords(Collections.emptyList()));
 
-            List<LoanApplicationVO> result = loanService.getApplications(1L);
+            var resultPage = loanService.getApplications(1L, 1, 10);
+            List<LoanApplicationVO> result = resultPage.getRecords();
 
             assertNotNull(result);
             assertTrue(result.isEmpty());

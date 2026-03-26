@@ -1,5 +1,6 @@
 package com.xindai.xindai.modules.risk.controller;
 
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.xindai.xindai.common.result.Result;
 import com.xindai.xindai.modules.risk.dto.RiskAssessmentVO;
 import com.xindai.xindai.modules.risk.entity.Blacklist;
@@ -66,8 +67,8 @@ public class RiskController {
             @Parameter(description = "评估类型：1-贷前，2-贷中，3-贷后", example = "2")
             @RequestParam(defaultValue = "2") Integer assessmentType) {
 
-        RiskAssessment assessment = riskAssessmentService.assess(userId, applicationId, assessmentType);
-        return Result.success(toVO(assessment));
+        var assessment = riskAssessmentService.assess(userId, applicationId, assessmentType);
+        return Result.success(riskAssessmentService.toVO(assessment));
     }
 
     @Operation(
@@ -82,26 +83,34 @@ public class RiskController {
     public Result<RiskAssessmentVO> getAssessment(
             @Parameter(description = "评估编号", required = true, example = "RA123456789")
             @PathVariable String assessmentNo) {
-        RiskAssessment assessment = riskAssessmentService.getByAssessmentNo(assessmentNo);
+        var assessment = riskAssessmentService.getByAssessmentNo(assessmentNo);
         if (assessment == null) {
             return Result.error("评估记录不存在");
         }
-        return Result.success(toVO(assessment));
+        return Result.success(riskAssessmentService.toVO(assessment));
     }
 
     @Operation(
             summary = "获取用户评估历史",
-            description = "获取指定用户的风险评估历史记录，最多返回最近20条"
+            description = "分页获取指定用户的风险评估历史记录"
     )
     @GetMapping("/history/{userId}")
-    public Result<List<RiskAssessmentVO>> getHistory(
+    public Result<Page<RiskAssessmentVO>> getHistory(
             @Parameter(description = "用户ID", required = true, example = "1")
-            @PathVariable Long userId) {
-        List<RiskAssessment> assessments = riskAssessmentService.getAssessmentHistory(userId);
-        List<RiskAssessmentVO> vos = assessments.stream()
-                .map(this::toVO)
+            @PathVariable Long userId,
+            @Parameter(description = "页码（从1开始）", example = "1")
+            @RequestParam(defaultValue = "1") int page,
+            @Parameter(description = "每页数量", example = "20")
+            @RequestParam(defaultValue = "20") int size) {
+        Page<RiskAssessment> assessmentPage = riskAssessmentService.getAssessmentHistory(userId, page, size);
+
+        Page<RiskAssessmentVO> voPage = new Page<>(assessmentPage.getCurrent(), assessmentPage.getSize(), assessmentPage.getTotal());
+        List<RiskAssessmentVO> voList = assessmentPage.getRecords().stream()
+                .map(riskAssessmentService::toVO)
                 .collect(Collectors.toList());
-        return Result.success(vos);
+        voPage.setRecords(voList);
+
+        return Result.success(voPage);
     }
 
     @Operation(
@@ -147,22 +156,5 @@ public class RiskController {
             @RequestParam String value) {
         blacklistService.removeFromBlacklist(type, value);
         return Result.success();
-    }
-
-    private RiskAssessmentVO toVO(RiskAssessment assessment) {
-        RiskAssessmentVO vo = new RiskAssessmentVO();
-        vo.setId(assessment.getId());
-        vo.setAssessmentNo(assessment.getAssessmentNo());
-        vo.setUserId(assessment.getUserId());
-        vo.setApplicationId(assessment.getApplicationId());
-        vo.setAssessmentType(assessment.getAssessmentType());
-        vo.setRiskScore(assessment.getRiskScore());
-        vo.setRiskLevel(assessment.getRiskLevel());
-        vo.setDecision(assessment.getDecision());
-        vo.setModelVersion(assessment.getModelVersion());
-        vo.setFactors(assessment.getFactors());
-        vo.setProcessingTimeMs(assessment.getProcessingTimeMs());
-        vo.setCreatedAt(assessment.getCreatedAt());
-        return vo;
     }
 }

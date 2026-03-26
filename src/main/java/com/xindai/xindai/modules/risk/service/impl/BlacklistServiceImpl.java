@@ -5,6 +5,7 @@ import com.xindai.xindai.modules.risk.entity.Blacklist;
 import com.xindai.xindai.modules.risk.mapper.BlacklistMapper;
 import com.xindai.xindai.modules.risk.service.BlacklistService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -69,6 +70,7 @@ public class BlacklistServiceImpl implements BlacklistService {
     }
 
     @Override
+    @CacheEvict(value = "blacklist", allEntries = true)
     public void addToBlacklist(Integer type, String value, String reason) {
         Blacklist blacklist = new Blacklist();
         blacklist.setType(type);
@@ -83,6 +85,7 @@ public class BlacklistServiceImpl implements BlacklistService {
     }
 
     @Override
+    @CacheEvict(value = "blacklist", allEntries = true)
     public void removeFromBlacklist(Integer type, String value) {
         blacklistMapper.delete(
                 new LambdaQueryWrapper<Blacklist>()

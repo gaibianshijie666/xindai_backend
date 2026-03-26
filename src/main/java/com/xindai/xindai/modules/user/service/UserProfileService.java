@@ -18,6 +18,11 @@ public interface UserProfileService {
     User getByPhone(String phone);
 
     /**
+     * 获取用户档案VO
+     */
+    UserVO getProfileVO(Long userId);
+
+    /**
      * 更新用户资料
      */
     UserVO updateProfile(Long userId, UserUpdateDTO dto);
@@ -31,4 +36,14 @@ public interface UserProfileService {
      * 实名认证
      */
     UserVO verifyIdentity(Long userId, VerifyIdentityDTO dto);
+
+    /**
+     * 统计用户总数
+     */
+    long countUsers();
+
+    /**
+     * 根据风险等级统计用户画像数量
+     */
+    int countProfilesByRiskLevel(Integer riskLevel);
 }

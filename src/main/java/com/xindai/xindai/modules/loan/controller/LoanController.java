@@ -2,6 +2,7 @@ package com.xindai.xindai.modules.loan.controller;
 
 import com.xindai.xindai.common.annotation.OperateLog;
 import com.xindai.xindai.common.result.Result;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.xindai.xindai.modules.loan.dto.*;
 import com.xindai.xindai.modules.loan.service.LoanService;
 import com.xindai.xindai.modules.loan.service.OverdueService;
@@ -123,9 +124,13 @@ public class LoanController {
             @ApiResponse(responseCode = "200", description = "查询成功")
     })
     @GetMapping("/applications")
-    public Result<List<LoanApplicationVO>> getApplications(
-            @Parameter(hidden = true) @RequestAttribute("userId") Long userId) {
-        return Result.success(loanService.getApplications(userId));
+    public Result<Page<LoanApplicationVO>> getApplications(
+            @Parameter(hidden = true) @RequestAttribute("userId") Long userId,
+            @Parameter(description = "页码（从1开始）", example = "1")
+            @RequestParam(defaultValue = "1") int page,
+            @Parameter(description = "每页数量", example = "10")
+            @RequestParam(defaultValue = "10") int size) {
+        return Result.success(loanService.getApplications(userId, page, size));
     }
 
     @Operation(
@@ -165,9 +170,13 @@ public class LoanController {
             @ApiResponse(responseCode = "200", description = "查询成功")
     })
     @GetMapping("/contracts")
-    public Result<List<LoanContractVO>> getContracts(
-            @Parameter(hidden = true) @RequestAttribute("userId") Long userId) {
-        return Result.success(loanService.getContracts(userId));
+    public Result<Page<LoanContractVO>> getContracts(
+            @Parameter(hidden = true) @RequestAttribute("userId") Long userId,
+            @Parameter(description = "页码（从1开始）", example = "1")
+            @RequestParam(defaultValue = "1") int page,
+            @Parameter(description = "每页数量", example = "10")
+            @RequestParam(defaultValue = "10") int size) {
+        return Result.success(loanService.getContracts(userId, page, size));
     }
 
     @Operation(
@@ -199,9 +208,13 @@ public class LoanController {
             description = "获取当前用户所有合同的还款计划"
     )
     @GetMapping("/repayment-plans")
-    public Result<List<RepaymentPlanVO>> getAllRepaymentPlans(
-            @Parameter(hidden = true) @RequestAttribute("userId") Long userId) {
-        return Result.success(loanService.getAllRepaymentPlans(userId));
+    public Result<Page<RepaymentPlanVO>> getAllRepaymentPlans(
+            @Parameter(hidden = true) @RequestAttribute("userId") Long userId,
+            @Parameter(description = "页码（从1开始）", example = "1")
+            @RequestParam(defaultValue = "1") int page,
+            @Parameter(description = "每页数量", example = "10")
+            @RequestParam(defaultValue = "10") int size) {
+        return Result.success(loanService.getAllRepaymentPlans(userId, page, size));
     }
 
     @Operation(

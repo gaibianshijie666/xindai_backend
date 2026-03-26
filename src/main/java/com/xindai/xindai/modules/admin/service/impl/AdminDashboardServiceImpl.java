@@ -1,23 +1,17 @@
 package com.xindai.xindai.modules.admin.service.impl;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.xindai.xindai.common.constants.RiskConstants;
 import com.xindai.xindai.modules.admin.service.AdminDashboardService;
 import com.xindai.xindai.modules.admin.vo.DashboardOverviewVO;
 import com.xindai.xindai.modules.admin.vo.RiskStatsVO;
 import com.xindai.xindai.modules.enterprise.dto.DailyLoanStats;
-import com.xindai.xindai.modules.loan.entity.LoanApplication;
-import com.xindai.xindai.modules.loan.entity.LoanContract;
-import com.xindai.xindai.modules.loan.enums.ContractStatus;
-import com.xindai.xindai.modules.loan.mapper.LoanApplicationMapper;
-import com.xindai.xindai.modules.loan.mapper.LoanContractMapper;
+import com.xindai.xindai.modules.loan.service.LoanService;
 import com.xindai.xindai.modules.risk.entity.RiskAssessment;
-import com.xindai.xindai.modules.risk.mapper.RiskAssessmentMapper;
-import com.xindai.xindai.modules.user.entity.UserProfile;
-import com.xindai.xindai.modules.user.mapper.UserMapper;
-import com.xindai.xindai.modules.user.mapper.UserProfileMapper;
+import com.xindai.xindai.modules.risk.service.RiskAssessmentService;
+import com.xindai.xindai.modules.user.service.UserProfileService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -35,23 +29,22 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AdminDashboardServiceImpl implements AdminDashboardService {
 
-    private final UserMapper userMapper;
-    private final UserProfileMapper userProfileMapper;
-    private final LoanApplicationMapper loanApplicationMapper;
-    private final LoanContractMapper loanContractMapper;
-    private final RiskAssessmentMapper riskAssessmentMapper;
+    private final LoanService loanService;
+    private final RiskAssessmentService riskAssessmentService;
+    private final UserProfileService userProfileService;
 
     private static final int STATUS_APPROVED = 2;
     private static final int STATUS_REJECTED = 3;
 
     @Override
+    @Cacheable(value = "dashboardStats", key = "'overview'")
     public DashboardOverviewVO getOverview() {
         DashboardOverviewVO vo = new DashboardOverviewVO();
         LocalDateTime todayStart = LocalDate.now().atStartOfDay();
 
-        vo.setTodayApplications(getApplicationCountSince(todayStart));
-        vo.setTodayApproved(getApplicationCountByStatusSince(STATUS_APPROVED, todayStart));
-        vo.setTodayRejected(getApplicationCountByStatusSince(STATUS_REJECTED, todayStart));
+        vo.setTodayApplications(loanService.countApplicationsSince(todayStart));
+        vo.setTodayApproved(loanService.countApplicationsByStatusSince(STATUS_APPROVED, todayStart));
+        vo.setTodayRejected(loanService.countApplicationsByStatusSince(STATUS_REJECTED, todayStart));
 
         int todayTotal = vo.getTodayApplications();
         if (todayTotal > 0) {
@@ -63,10 +56,9 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
             vo.setApprovalRate(BigDecimal.ZERO);
         }
 
-        vo.setTotalUsers(getTotalUserCount());
-        LoanStats totalStats = getTotalLoanStats();
-        vo.setTotalLoans(totalStats.count());
-        vo.setTotalAmount(totalStats.amount());
+        vo.setTotalUsers((int) userProfileService.countUsers());
+        vo.setTotalLoans(loanService.countApproved());
+        vo.setTotalAmount(loanService.sumApprovedAmount());
 
         vo.setOverdueRate(calculateOverdueRate());
         vo.setRiskDistribution(getRiskDistribution());
@@ -90,44 +82,13 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
         return vo;
     }
 
-    private int getApplicationCountSince(LocalDateTime since) {
-        return loanApplicationMapper.selectCount(
-                new LambdaQueryWrapper<LoanApplication>()
-                        .ge(LoanApplication::getCreatedAt, since)
-        ).intValue();
-    }
-
-    private int getApplicationCountByStatusSince(Integer status, LocalDateTime since) {
-        return loanApplicationMapper.selectCount(
-                new LambdaQueryWrapper<LoanApplication>()
-                        .eq(LoanApplication::getStatus, status)
-                        .ge(LoanApplication::getCreatedAt, since)
-        ).intValue();
-    }
-
-    private int getTotalUserCount() {
-        return userMapper.selectCount(new LambdaQueryWrapper<>()).intValue();
-    }
-
-    private LoanStats getTotalLoanStats() {
-        return new LoanStats(
-                loanApplicationMapper.countApproved(),
-                loanApplicationMapper.sumApprovedAmount()
-        );
-    }
-
     private BigDecimal calculateOverdueRate() {
-        long totalContracts = loanContractMapper.selectCount(
-                new LambdaQueryWrapper<LoanContract>()
-        );
+        long totalContracts = loanService.countAllContracts();
         if (totalContracts == 0) {
             return BigDecimal.ZERO;
         }
 
-        long overdueContracts = loanContractMapper.selectCount(
-                new LambdaQueryWrapper<LoanContract>()
-                        .eq(LoanContract::getStatus, ContractStatus.OVERDUE.getCode())
-        );
+        long overdueContracts = loanService.countOverdueContracts();
 
         return BigDecimal.valueOf(overdueContracts)
                 .multiply(BigDecimal.valueOf(100))
@@ -136,17 +97,10 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
 
     private DashboardOverviewVO.RiskDistribution getRiskDistribution() {
         DashboardOverviewVO.RiskDistribution distribution = new DashboardOverviewVO.RiskDistribution();
-        distribution.setLow(getUserProfileCountByRiskLevel(RiskConstants.RISK_LEVEL_LOW));
-        distribution.setMedium(getUserProfileCountByRiskLevel(RiskConstants.RISK_LEVEL_MEDIUM));
-        distribution.setHigh(getUserProfileCountByRiskLevel(RiskConstants.RISK_LEVEL_HIGH));
+        distribution.setLow(userProfileService.countProfilesByRiskLevel(RiskConstants.RISK_LEVEL_LOW));
+        distribution.setMedium(userProfileService.countProfilesByRiskLevel(RiskConstants.RISK_LEVEL_MEDIUM));
+        distribution.setHigh(userProfileService.countProfilesByRiskLevel(RiskConstants.RISK_LEVEL_HIGH));
         return distribution;
-    }
-
-    private int getUserProfileCountByRiskLevel(Integer riskLevel) {
-        return userProfileMapper.selectCount(
-                new LambdaQueryWrapper<UserProfile>()
-                        .eq(UserProfile::getRiskLevel, riskLevel)
-        ).intValue();
     }
 
     private int parseRange(String range) {
@@ -161,10 +115,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
     }
 
     private RiskStatsVO.RiskDistribution calculateRiskDistribution(LocalDateTime since) {
-        List<RiskAssessment> assessments = riskAssessmentMapper.selectList(
-                new LambdaQueryWrapper<RiskAssessment>()
-                        .ge(RiskAssessment::getCreatedAt, since)
-        );
+        List<RiskAssessment> assessments = riskAssessmentService.getAssessmentsSince(since);
 
         int total = assessments.size();
         if (total == 0) {
@@ -195,7 +146,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
      */
     private List<RiskStatsVO.DailyStats> calculateDailyStats(LocalDateTime startDate, LocalDateTime endDate) {
         // 一次性获取所有天的申请统计
-        List<DailyLoanStats> loanStats = loanApplicationMapper.getDailyLoanStats(startDate, endDate);
+        List<DailyLoanStats> loanStats = loanService.getDailyLoanStats(startDate, endDate);
         Map<String, DailyLoanStats> statsMap = loanStats.stream()
                 .collect(Collectors.toMap(
                         s -> s.getDate().format(DateTimeFormatter.ISO_LOCAL_DATE),
@@ -211,13 +162,10 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                 ));
 
         // 一次性获取所有天的风险评估（用于计算平均风险分）
-        List<RiskAssessment> assessments = riskAssessmentMapper.selectList(
-                new LambdaQueryWrapper<RiskAssessment>()
-                        .ge(RiskAssessment::getCreatedAt, startDate)
-                        .lt(RiskAssessment::getCreatedAt, endDate)
-        );
+        List<RiskAssessment> assessments = riskAssessmentService.getAssessmentsSince(startDate);
         Map<String, List<BigDecimal>> dailyScores = assessments.stream()
                 .filter(a -> a.getRiskScore() != null && a.getCreatedAt() != null)
+                .filter(a -> a.getCreatedAt().isBefore(endDate))
                 .collect(Collectors.groupingBy(
                         a -> a.getCreatedAt().toLocalDate().format(DateTimeFormatter.ISO_LOCAL_DATE),
                         Collectors.mapping(RiskAssessment::getRiskScore, Collectors.toList())
@@ -254,6 +202,4 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
 
         return result;
     }
-
-    private record LoanStats(int count, BigDecimal amount) {}
 }

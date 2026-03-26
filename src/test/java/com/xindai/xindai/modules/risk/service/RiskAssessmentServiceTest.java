@@ -1,6 +1,7 @@
 package com.xindai.xindai.modules.risk.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.xindai.xindai.client.model.ModelServiceClient;
 import com.xindai.xindai.client.model.dto.PredictResponse;
 import com.xindai.xindai.client.thirdparty.DataAggregationService;
@@ -382,25 +383,25 @@ class RiskAssessmentServiceTest {
             assessment2.setId(2L);
             assessment2.setUserId(1L);
 
-            when(assessmentMapper.selectList(any(LambdaQueryWrapper.class)))
-                    .thenReturn(List.of(assessment1, assessment2));
+            when(assessmentMapper.selectPage(any(Page.class), any(LambdaQueryWrapper.class)))
+                    .thenReturn(new Page<>(1, 20, 2).setRecords(List.of(assessment1, assessment2)));
 
-            var result = riskAssessmentService.getAssessmentHistory(1L);
+            var result = riskAssessmentService.getAssessmentHistory(1L, 1, 20);
 
             assertNotNull(result);
-            assertEquals(2, result.size());
+            assertEquals(2, result.getRecords().size());
         }
 
         @Test
         @DisplayName("用户无评估历史返回空列表")
         void getAssessmentHistory_Empty() {
-            when(assessmentMapper.selectList(any(LambdaQueryWrapper.class)))
-                    .thenReturn(List.of());
+            when(assessmentMapper.selectPage(any(Page.class), any(LambdaQueryWrapper.class)))
+                    .thenReturn(new Page<>(1, 20, 0).setRecords(List.of()));
 
-            var result = riskAssessmentService.getAssessmentHistory(1L);
+            var result = riskAssessmentService.getAssessmentHistory(1L, 1, 20);
 
             assertNotNull(result);
-            assertTrue(result.isEmpty());
+            assertTrue(result.getRecords().isEmpty());
         }
     }
 

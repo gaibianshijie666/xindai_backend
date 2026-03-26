@@ -2,6 +2,7 @@ package com.xindai.xindai.modules.risk.service.impl;
 
 import cn.hutool.core.util.IdUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.xindai.xindai.client.model.ModelServiceClient;
 import com.xindai.xindai.client.model.dto.PredictResponse;
 import com.xindai.xindai.common.exception.BusinessException;
@@ -10,6 +11,7 @@ import com.xindai.xindai.modules.risk.entity.Blacklist;
 import com.xindai.xindai.modules.risk.entity.RiskAssessment;
 import com.xindai.xindai.modules.risk.mapper.BlacklistMapper;
 import com.xindai.xindai.modules.risk.mapper.RiskAssessmentMapper;
+import com.xindai.xindai.modules.risk.dto.RiskAssessmentVO;
 import com.xindai.xindai.modules.risk.service.RiskAssessmentService;
 import com.xindai.xindai.modules.user.entity.User;
 import com.xindai.xindai.modules.user.entity.UserProfile;
@@ -199,12 +201,12 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
     }
 
     @Override
-    public List<RiskAssessment> getAssessmentHistory(Long userId) {
-        return riskAssessmentMapper.selectList(
+    public Page<RiskAssessment> getAssessmentHistory(Long userId, int page, int size) {
+        return riskAssessmentMapper.selectPage(
+                new Page<>(page, size),
                 new LambdaQueryWrapper<RiskAssessment>()
                         .eq(RiskAssessment::getUserId, userId)
                         .orderByDesc(RiskAssessment::getCreatedAt)
-                        .last("LIMIT 20")
         );
     }
 
@@ -213,6 +215,39 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
         return riskAssessmentMapper.selectOne(
                 new LambdaQueryWrapper<RiskAssessment>()
                         .eq(RiskAssessment::getAssessmentNo, assessmentNo)
+        );
+    }
+
+    @Override
+    public RiskAssessmentVO toVO(RiskAssessment assessment) {
+        RiskAssessmentVO vo = new RiskAssessmentVO();
+        vo.setId(assessment.getId());
+        vo.setAssessmentNo(assessment.getAssessmentNo());
+        vo.setUserId(assessment.getUserId());
+        vo.setApplicationId(assessment.getApplicationId());
+        vo.setAssessmentType(assessment.getAssessmentType());
+        vo.setRiskScore(assessment.getRiskScore());
+        vo.setRiskLevel(assessment.getRiskLevel());
+        vo.setDecision(assessment.getDecision());
+        vo.setModelVersion(assessment.getModelVersion());
+        vo.setFactors(assessment.getFactors());
+        vo.setProcessingTimeMs(assessment.getProcessingTimeMs());
+        vo.setCreatedAt(assessment.getCreatedAt());
+        return vo;
+    }
+
+    @Override
+    public List<RiskAssessmentVO> toVOList(List<RiskAssessment> assessments) {
+        return assessments.stream()
+                .map(this::toVO)
+                .collect(java.util.stream.Collectors.toList());
+    }
+
+    @Override
+    public List<RiskAssessment> getAssessmentsSince(LocalDateTime since) {
+        return riskAssessmentMapper.selectList(
+                new LambdaQueryWrapper<RiskAssessment>()
+                        .ge(RiskAssessment::getCreatedAt, since)
         );
     }
 

@@ -3,6 +3,7 @@ package com.xindai.xindai.modules.enterprise.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.xindai.xindai.common.exception.BusinessException;
 import com.xindai.xindai.common.exception.ErrorCode;
+import com.xindai.xindai.modules.enterprise.dto.EnterpriseInfoVO;
 import com.xindai.xindai.modules.enterprise.dto.EnterpriseLoginDTO;
 import com.xindai.xindai.modules.enterprise.dto.EnterpriseUserVO;
 import com.xindai.xindai.modules.enterprise.dto.PasswordChangeDTO;
@@ -91,6 +92,32 @@ public class EnterpriseAuthServiceImpl implements EnterpriseAuthService {
             throw new BusinessException(ErrorCode.ENTERPRISE_NOT_FOUND);
         }
         return enterprise;
+    }
+
+    @Override
+    public EnterpriseUserVO getUserProfile(Long userId, Long enterpriseId) {
+        EnterpriseUser user = getCurrentUser(userId);
+        Enterprise enterprise = getEnterprise(enterpriseId);
+
+        EnterpriseUserVO vo = new EnterpriseUserVO();
+        vo.setId(user.getId());
+        vo.setEnterpriseId(enterprise.getId());
+        vo.setEnterpriseName(enterprise.getName());
+        vo.setUsername(user.getUsername());
+        vo.setRealName(user.getRealName());
+        vo.setPhone(user.getPhone());
+        vo.setRole(user.getRole());
+        return vo;
+    }
+
+    @Override
+    public EnterpriseInfoVO getEnterpriseInfoVO(Long enterpriseId) {
+        Enterprise enterprise = getEnterprise(enterpriseId);
+        EnterpriseInfoVO vo = new EnterpriseInfoVO();
+        vo.setName(enterprise.getName());
+        vo.setEnterpriseNo(enterprise.getEnterpriseNo());
+        vo.setApiKey(enterprise.getApiKey());
+        return vo;
     }
 
     @Override

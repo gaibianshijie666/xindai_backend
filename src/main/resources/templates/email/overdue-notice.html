@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="zh-CN">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>逾期通知</title>
+    <style>
+        body { font-family: 'Microsoft YaHei', Arial, sans-serif; background-color: #f5f7fa; margin: 0; padding: 20px; }
+        .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; }
+        .header { background-color: #ff4d4f; color: #ffffff; padding: 24px; text-align: center; }
+        .header h1 { margin: 0; font-size: 22px; }
+        .body { padding: 24px; color: #333333; line-height: 1.8; }
+        .body p { margin: 12px 0; }
+        .info-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+        .info-table td { padding: 8px 12px; border: 1px solid #e8e8e8; }
+        .info-table td:first-child { background-color: #fafafa; font-weight: bold; width: 120px; }
+        .footer { background-color: #f5f7fa; padding: 16px 24px; text-align: center; color: #999999; font-size: 12px; }
+        .warning { color: #ff4d4f; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>逾期还款通知</h1>
+        </div>
+        <div class="body">
+            <p>尊敬的用户，您好！</p>
+            <p>您的贷款已发生逾期，请尽快还款以避免产生额外费用和影响信用记录：</p>
+            <table class="info-table">
+                <tr th:if="${contractNo != null}">
+                    <td>合同编号</td>
+                    <td th:text="${contractNo}">--</td>
+                </tr>
+                <tr th:if="${overdueDays != null}">
+                    <td>逾期天数</td>
+                    <td class="warning" th:text="${overdueDays + ' 天'}">--</td>
+                </tr>
+                <tr th:if="${overdueAmount != null}">
+                    <td>逾期金额</td>
+                    <td class="warning" th:text="${overdueAmount}">--</td>
+                </tr>
+            </table>
+            <p>逾期将产生罚息，并可能影响您的个人信用。请立即登录系统完成还款。</p>
+            <p>如有疑问，请联系客服。</p>
+        </div>
+        <div class="footer">
+            <p>此邮件由系统自动发送，请勿直接回复。</p>
+            <p>&copy; 2026 信袋金融科技</p>
+        </div>
+    </div>
+</body>
+</html>

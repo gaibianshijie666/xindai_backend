@@ -47,6 +47,15 @@ public class UserProfileServiceImpl implements UserProfileService {
     }
 
     @Override
+    public UserVO getProfileVO(Long userId) {
+        User user = getById(userId);
+        if (user == null) {
+            throw new BusinessException(ErrorCode.USER_NOT_FOUND);
+        }
+        return buildUserVO(user, null);
+    }
+
+    @Override
     @CacheEvict(value = {"userById", "userByPhone"}, allEntries = true)
     public UserVO updateProfile(Long userId, UserUpdateDTO dto) {
         User user = getById(userId);
@@ -138,5 +147,18 @@ public class UserProfileServiceImpl implements UserProfileService {
         vo.setStatus(user.getStatus());
         vo.setToken(token);
         return vo;
+    }
+
+    @Override
+    public long countUsers() {
+        return userMapper.selectCount(new LambdaQueryWrapper<>());
+    }
+
+    @Override
+    public int countProfilesByRiskLevel(Integer riskLevel) {
+        return userProfileMapper.selectCount(
+                new LambdaQueryWrapper<UserProfile>()
+                        .eq(UserProfile::getRiskLevel, riskLevel)
+        ).intValue();
     }
 }

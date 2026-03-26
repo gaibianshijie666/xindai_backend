@@ -1,5 +1,6 @@
 package com.xindai.xindai.modules.enterprise.service;
 
+import com.xindai.xindai.modules.enterprise.dto.EnterpriseInfoVO;
 import com.xindai.xindai.modules.enterprise.dto.EnterpriseLoginDTO;
 import com.xindai.xindai.modules.enterprise.dto.EnterpriseUserVO;
 import com.xindai.xindai.modules.enterprise.dto.PasswordChangeDTO;
@@ -25,6 +26,16 @@ public interface EnterpriseAuthService {
      * 获取企业信息
      */
     Enterprise getEnterprise(Long enterpriseId);
+
+    /**
+     * 获取当前用户档案VO
+     */
+    EnterpriseUserVO getUserProfile(Long userId, Long enterpriseId);
+
+    /**
+     * 获取企业信息VO
+     */
+    EnterpriseInfoVO getEnterpriseInfoVO(Long enterpriseId);
 
     /**
      * 修改密码

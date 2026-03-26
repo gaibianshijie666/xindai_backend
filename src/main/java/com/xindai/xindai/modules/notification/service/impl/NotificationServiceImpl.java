@@ -3,6 +3,8 @@ package com.xindai.xindai.modules.notification.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.xindai.xindai.common.notification.channel.NotificationChannel;
+import com.xindai.xindai.common.notification.channel.NotificationMessage;
 import com.xindai.xindai.modules.notification.dto.NotificationQueryDTO;
 import com.xindai.xindai.modules.notification.dto.NotificationVO;
 import com.xindai.xindai.modules.notification.entity.Notification;
@@ -22,6 +24,7 @@ import java.util.List;
 public class NotificationServiceImpl implements NotificationService {
 
     private final NotificationMapper notificationMapper;
+    private final List<NotificationChannel> notificationChannels;
 
     @Override
     public void send(Long userId, String userType, String title, String content, String type, String relatedId) {
@@ -98,5 +101,20 @@ public class NotificationServiceImpl implements NotificationService {
                         .eq(Notification::getUserId, userId)
                         .eq(Notification::getIsRead, 0)
         );
+    }
+
+    @Override
+    public void sendMultiChannel(NotificationMessage message) {
+        log.info("Sending multi-channel notification for userId={}, type={}", message.getUserId(), message.getType());
+        for (NotificationChannel channel : notificationChannels) {
+            try {
+                if (channel.supports(message.getType())) {
+                    channel.send(message);
+                }
+            } catch (Exception e) {
+                log.error("Failed to send notification via channel {} for userId={}, type={}",
+                        channel.getClass().getSimpleName(), message.getUserId(), message.getType(), e);
+            }
+        }
     }
 }

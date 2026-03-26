@@ -2,7 +2,10 @@ package com.xindai.xindai.modules.user.controller;
 
 import com.xindai.xindai.common.annotation.OperateLog;
 import com.xindai.xindai.common.result.Result;
-import com.xindai.xindai.modules.user.dto.*;
+import com.xindai.xindai.modules.user.dto.PasswordChangeDTO;
+import com.xindai.xindai.modules.user.dto.UserUpdateDTO;
+import com.xindai.xindai.modules.user.dto.UserVO;
+import com.xindai.xindai.modules.user.dto.VerifyIdentityDTO;
 import com.xindai.xindai.modules.user.service.UserProfileService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -36,17 +39,7 @@ public class UserProfileController {
     @GetMapping("/profile")
     public Result<UserVO> profile(
             @Parameter(hidden = true) @RequestAttribute("userId") Long userId) {
-        var user = userProfileService.getById(userId);
-        if (user == null) {
-            return Result.error(404, "用户不存在");
-        }
-        UserVO vo = new UserVO();
-        vo.setId(user.getId());
-        vo.setPhone(user.getPhone());
-        vo.setRealName(user.getRealName());
-        vo.setIdCard(user.getIdCard());
-        vo.setStatus(user.getStatus());
-        return Result.success(vo);
+        return Result.success(userProfileService.getProfileVO(userId));
     }
 
     @Operation(

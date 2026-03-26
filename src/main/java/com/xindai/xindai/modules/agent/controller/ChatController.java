@@ -11,10 +11,13 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import jakarta.annotation.PreDestroy;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -29,6 +32,7 @@ import java.util.concurrent.TimeUnit;
 @RestController
 @RequestMapping("/api/v1/agent")
 @RequiredArgsConstructor
+@Validated
 @SecurityRequirement(name = "bearerAuth")
 public class ChatController {
 
@@ -45,7 +49,7 @@ public class ChatController {
     @GetMapping(value = "/user/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter userStreamChat(
             @RequestAttribute("userId") Long userId,
-            @RequestParam String message) {
+            @RequestParam @NotBlank(message = "消息内容不能为空") @Size(max = 2000, message = "消息长度不能超过2000个字符") String message) {
         ToolContext.setUserId(userId);
         ToolContext.setPortal("user");
         String memoryId = "user:" + userId;
@@ -60,7 +64,7 @@ public class ChatController {
     public SseEmitter enterpriseStreamChat(
             @RequestAttribute("userId") Long userId,
             @RequestAttribute("enterpriseId") Long enterpriseId,
-            @RequestParam String message) {
+            @RequestParam @NotBlank(message = "消息内容不能为空") @Size(max = 2000, message = "消息长度不能超过2000个字符") String message) {
         ToolContext.setUserId(userId);
         ToolContext.setEnterpriseId(enterpriseId);
         ToolContext.setPortal("enterprise");
@@ -75,7 +79,7 @@ public class ChatController {
     @GetMapping(value = "/admin/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter adminStreamChat(
             @RequestAttribute("userId") Long userId,
-            @RequestParam String message) {
+            @RequestParam @NotBlank(message = "消息内容不能为空") @Size(max = 2000, message = "消息长度不能超过2000个字符") String message) {
         ToolContext.setUserId(userId);
         ToolContext.setPortal("admin");
         String memoryId = "admin:" + userId;

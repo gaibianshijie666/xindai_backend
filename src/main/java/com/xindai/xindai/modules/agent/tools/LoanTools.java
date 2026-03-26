@@ -41,7 +41,7 @@ public class LoanTools {
     @Tool("查询当前用户的所有借款申请记录")
     public String getLoanApplications() {
         try {
-            List<LoanApplicationVO> apps = loanService.getApplications(ToolContext.getUserId());
+            List<LoanApplicationVO> apps = loanService.getApplications(ToolContext.getUserId(), 1, 50).getRecords();
             if (apps.isEmpty()) return "暂无借款申请记录";
             return apps.stream().map(a -> String.format(
                     "申请编号: %s, 金额: %.2f元, 期限: %d个月, 状态: %s, 申请时间: %s",
@@ -57,7 +57,7 @@ public class LoanTools {
     @Tool("查询当前用户的所有借款合同")
     public String getLoanContracts() {
         try {
-            List<LoanContractVO> contracts = loanService.getContracts(ToolContext.getUserId());
+            List<LoanContractVO> contracts = loanService.getContracts(ToolContext.getUserId(), 1, 50).getRecords();
             if (contracts.isEmpty()) return "暂无借款合同";
             return contracts.stream().map(c -> String.format(
                     "合同编号: %s, 本金: %.2f元, 利率: %.2f%%, 期限: %d个月, 状态: %s",

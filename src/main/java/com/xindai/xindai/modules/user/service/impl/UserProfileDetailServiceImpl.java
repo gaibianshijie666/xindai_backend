@@ -8,6 +8,8 @@ import com.xindai.xindai.modules.user.mapper.UserProfileMapper;
 import com.xindai.xindai.modules.user.service.UserProfileDetailService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,6 +32,7 @@ public class UserProfileDetailServiceImpl implements UserProfileDetailService {
     }
 
     @Override
+    @Cacheable(value = "userProfile", key = "#userId", unless = "#result == null")
     public UserProfileVO getProfileDetail(Long userId) {
         UserProfile profile = userProfileMapper.selectOne(
                 new LambdaQueryWrapper<UserProfile>().eq(UserProfile::getUserId, userId)
@@ -44,6 +47,7 @@ public class UserProfileDetailServiceImpl implements UserProfileDetailService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    @CacheEvict(value = "userProfile", key = "#userId")
     public UserProfileVO updateProfileDetail(Long userId, UserProfileUpdateDTO dto) {
         // 获取或创建用户画像
         UserProfile profile = userProfileMapper.selectOne(

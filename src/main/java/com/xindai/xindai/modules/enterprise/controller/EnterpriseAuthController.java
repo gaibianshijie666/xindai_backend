@@ -5,8 +5,6 @@ import com.xindai.xindai.modules.enterprise.dto.EnterpriseLoginDTO;
 import com.xindai.xindai.modules.enterprise.dto.EnterpriseUserVO;
 import com.xindai.xindai.modules.enterprise.dto.PasswordChangeDTO;
 import com.xindai.xindai.modules.enterprise.dto.EnterpriseInfoVO;
-import com.xindai.xindai.modules.enterprise.entity.Enterprise;
-import com.xindai.xindai.modules.enterprise.entity.EnterpriseUser;
 import com.xindai.xindai.modules.enterprise.service.EnterpriseAuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -36,20 +34,7 @@ public class EnterpriseAuthController {
     public Result<EnterpriseUserVO> profile(
             @RequestAttribute(value = "enterpriseId", required = false) Long enterpriseId,
             @RequestAttribute(value = "userId", required = false) Long userId) {
-
-        EnterpriseUser user = enterpriseAuthService.getCurrentUser(userId);
-        Enterprise enterprise = enterpriseAuthService.getEnterprise(enterpriseId);
-
-        EnterpriseUserVO vo = new EnterpriseUserVO();
-        vo.setId(user.getId());
-        vo.setEnterpriseId(enterprise.getId());
-        vo.setEnterpriseName(enterprise.getName());
-        vo.setUsername(user.getUsername());
-        vo.setRealName(user.getRealName());
-        vo.setPhone(user.getPhone());
-        vo.setRole(user.getRole());
-
-        return Result.success(vo);
+        return Result.success(enterpriseAuthService.getUserProfile(userId, enterpriseId));
     }
 
     @Operation(summary = "修改密码")
@@ -65,11 +50,6 @@ public class EnterpriseAuthController {
     @GetMapping("/info")
     public Result<EnterpriseInfoVO> getEnterpriseInfo(
             @RequestAttribute("enterpriseId") Long enterpriseId) {
-        Enterprise enterprise = enterpriseAuthService.getEnterprise(enterpriseId);
-        EnterpriseInfoVO vo = new EnterpriseInfoVO();
-        vo.setName(enterprise.getName());
-        vo.setEnterpriseNo(enterprise.getEnterpriseNo());
-        vo.setApiKey(enterprise.getApiKey());
-        return Result.success(vo);
+        return Result.success(enterpriseAuthService.getEnterpriseInfoVO(enterpriseId));
     }
 }

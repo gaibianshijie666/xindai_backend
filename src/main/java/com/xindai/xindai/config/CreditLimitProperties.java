@@ -34,4 +34,34 @@ public class CreditLimitProperties {
     private Map<String, Double> dtiAdjustments = new HashMap<>(Map.of(
         "low", 1.0, "medium", 0.9, "high", 0.7, "very-high", 0.5
     ));
+
+    /**
+     * 根据信用等级配置年化利率（单位：%）
+     * key: 信用等级（A-G），value: 年化利率
+     */
+    private Map<String, BigDecimal> interestRatesByGrade = new HashMap<>(Map.of(
+        "A", new BigDecimal("8"),
+        "B", new BigDecimal("11"),
+        "C", new BigDecimal("14"),
+        "D", new BigDecimal("18"),
+        "E", new BigDecimal("22"),
+        "F", new BigDecimal("26"),
+        "G", new BigDecimal("30")
+    ));
+
+    /**
+     * 默认利率（当信用等级不在配置范围内时使用）
+     */
+    private BigDecimal defaultInterestRate = new BigDecimal("15");
+
+    /**
+     * 根据信用等级获取利率
+     */
+    public BigDecimal getInterestRate(String grade) {
+        if (grade == null) {
+            return defaultInterestRate;
+        }
+        BigDecimal rate = interestRatesByGrade.get(grade.toUpperCase());
+        return rate != null ? rate : defaultInterestRate;
+    }
 }
