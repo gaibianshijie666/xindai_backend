@@ -1,0 +1,35 @@
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/xindai_test?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=false&serverTimezone=Asia/Shanghai
+    username: root
+    password: root
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      database: 1
+
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
+jwt:
+  secret: test-secret-key-for-jwt-token-generation-must-be-at-least-256-bits
+  expiration: 7200000
+
+model:
+  service:
+    url: http://localhost:8001
+    enabled: false
+
+third-party:
+  credit:
+    enabled: false
+  zhima:
+    enabled: false
+  carrier:
+    enabled: false
+  social:
+    enabled: false

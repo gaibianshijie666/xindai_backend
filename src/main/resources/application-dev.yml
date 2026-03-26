@@ -149,3 +149,7 @@ agent:
   max-tokens: 2048
   timeout-seconds: 60
   memory-max-messages: 20
+
+# 加密密钥 (dev - fixed key for development)
+encryption:
+  key: eGluZGFpX2Rldl9hZXMyNTZfc2VjcmV0X2tleV8zMjA=
