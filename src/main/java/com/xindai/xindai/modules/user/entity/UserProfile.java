@@ -75,6 +75,18 @@ public class UserProfile {
     @TableField(value = "credit_features", typeHandler = JacksonTypeHandler.class)
     private Map<String, Object> creditFeatures;
 
+    /**
+     * 实名认证状态: 0=未认证,1=认证中,2=已认证,3=认证失败
+     */
+    @TableField("identity_status")
+    private Integer identityStatus;
+
+    /**
+     * 实名认证时间
+     */
+    @TableField("identity_verified_at")
+    private LocalDateTime identityVerifiedAt;
+
     @TableField("profile_updated_at")
     private LocalDateTime profileUpdatedAt;
 

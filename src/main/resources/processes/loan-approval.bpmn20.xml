@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:flowable="http://flowable.org/bpmn"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             targetNamespace="http://xindai.com/loan">
+
+    <process id="loanApproval" name="贷款审批流程" isExecutable="true">
+
+        <!-- 开始事件 -->
+        <startEvent id="startEvent" name="提交申请"/>
+
+        <!-- 开始 -> 风控评估 -->
+        <sequenceFlow id="flowStartToAssessment" sourceRef="startEvent" targetRef="riskAssessment"/>
+
+        <!-- 风控评估服务任务 -->
+        <serviceTask id="riskAssessment" name="风控评估"
+                     flowable:delegateExpression="${riskAssessmentDelegate}"/>
+
+        <!-- 风控评估 -> 排他网关 -->
+        <sequenceFlow id="flowAssessmentToGateway" sourceRef="riskAssessment" targetRef="riskGateway"/>
+
+        <!-- 排他网关：根据风险等级分流 -->
+        <exclusiveGateway id="riskGateway" name="风险等级判断"/>
+
+        <!-- 低风险：自动通过 -->
+        <sequenceFlow id="flowLowRisk" sourceRef="riskGateway" targetRef="endEventApproved">
+            <conditionExpression xsi:type="tFormalExpression">
+                ${riskLevel == 'LOW'}
+            </conditionExpression>
+        </sequenceFlow>
+
+        <!-- 中风险：人工审核 -->
+        <sequenceFlow id="flowMediumRisk" sourceRef="riskGateway" targetRef="manualReviewTask">
+            <conditionExpression xsi:type="tFormalExpression">
+                ${riskLevel == 'MEDIUM'}
+            </conditionExpression>
+        </sequenceFlow>
+
+        <!-- 高风险：自动拒绝 -->
+        <sequenceFlow id="flowHighRisk" sourceRef="riskGateway" targetRef="endEventRejected">
+            <conditionExpression xsi:type="tFormalExpression">
+                ${riskLevel == 'HIGH'}
+            </conditionExpression>
+        </sequenceFlow>
+
+        <!-- 人工审核用户任务 -->
+        <userTask id="manualReviewTask" name="人工审核"
+                  flowable:assignee="${assignee}"
+                  flowable:candidateGroups="admin"/>
+
+        <!-- 审核结果排他网关 -->
+        <exclusiveGateway id="reviewGateway" name="审核结果判断"/>
+
+        <!-- 审核通过 -->
+        <sequenceFlow id="flowReviewApprove" sourceRef="manualReviewTask" targetRef="reviewGateway"/>
+        <sequenceFlow id="flowApproved" sourceRef="reviewGateway" targetRef="endEventApproved">
+            <conditionExpression xsi:type="tFormalExpression">
+                ${reviewResult == 'APPROVE'}
+            </conditionExpression>
+        </sequenceFlow>
+
+        <!-- 审核拒绝 -->
+        <sequenceFlow id="flowRejected" sourceRef="reviewGateway" targetRef="endEventRejected">
+            <conditionExpression xsi:type="tFormalExpression">
+                ${reviewResult == 'REJECT'}
+            </conditionExpression>
+        </sequenceFlow>
+
+        <!-- 退回补充 -->
+        <sequenceFlow id="flowReturned" sourceRef="reviewGateway" targetRef="manualReviewTask">
+            <conditionExpression xsi:type="tFormalExpression">
+                ${reviewResult == 'RETURN'}
+            </conditionExpression>
+        </sequenceFlow>
+
+        <!-- 结束事件：通过 -->
+        <endEvent id="endEventApproved" name="审批通过"/>
+
+        <!-- 结束事件：拒绝 -->
+        <endEvent id="endEventRejected" name="审批拒绝"/>
+
+    </process>
+</definitions>

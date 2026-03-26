@@ -76,6 +76,12 @@ public class LoanServiceImpl implements LoanService {
     @Transactional(rollbackFor = Exception.class)
     @CacheEvict(value = "creditLimit", key = "#userId")
     public LoanApplicationVO apply(Long userId, LoanApplyDTO dto) {
+        // KYC认证检查：用户必须已完成实名认证（identityStatus == 2）
+        UserProfile profile = getUserProfile(userId);
+        if (profile == null || profile.getIdentityStatus() == null || profile.getIdentityStatus() != 2) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "请先完成实名认证后再申请借款");
+        }
+
         CreditLimit limit = getOrCreateCreditLimit(userId);
 
         // 检查额度是否足够

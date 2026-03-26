@@ -91,6 +91,12 @@ rate-limit:
     /api/v1/user/register: 5/60
     /api/v1/loan/apply: 10/60
 
+# Flowable 工作流配置
+flowable:
+  async-executor-activate: false
+  database-schema-update: true
+  process-definition-location-prefix: classpath*:/processes/
+
 # 文件上传配置
 file:
   upload:

@@ -38,12 +38,21 @@ public enum ErrorCode {
     REPAYMENT_ALREADY_PAID(2009, "该期已还款"),
     LIMIT_INCREASE_TOO_MUCH(2010, "提额申请金额过大"),
     LIMIT_INCREASE_REJECTED(2011, "提额申请被拒绝"),
+    BANK_ACCOUNT_NOT_FOUND(2012, "银行卡不存在"),
+    BANK_ACCOUNT_LIMIT_EXCEEDED(2013, "银行卡数量已达上限"),
+    DISBURSEMENT_NOT_FOUND(2014, "放款记录不存在"),
+    DISBURSEMENT_INVALID_STATUS(2015, "放款记录状态异常"),
 
     // 风控模块 3xxx
     RISK_ASSESSMENT_FAILED(3001, "风险评估失败"),
     IN_BLACKLIST(3002, "用户在黑名单中"),
     BLACKLIST_ALREADY_EXISTS(3003, "黑名单记录已存在"),
     BLACKLIST_NOT_FOUND(3004, "黑名单记录不存在"),
+    KYC_VERIFICATION_FAILED(3005, "实名认证失败"),
+
+    // 催收模块 6xxx
+    COLLECTION_TASK_NOT_FOUND(6001, "催收任务不存在"),
+    COLLECTION_TASK_STATUS_INVALID(6002, "催收任务状态不允许此操作"),
 
     // 企业模块 4xxx
     ENTERPRISE_NOT_FOUND(4001, "企业不存在"),

@@ -1,11 +1,15 @@
 package com.xindai.xindai.modules.user.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.xindai.xindai.client.kyc.KycResult;
+import com.xindai.xindai.client.kyc.KycService;
 import com.xindai.xindai.common.exception.BusinessException;
 import com.xindai.xindai.common.exception.ErrorCode;
 import com.xindai.xindai.modules.user.dto.*;
 import com.xindai.xindai.modules.user.entity.User;
+import com.xindai.xindai.modules.user.entity.UserProfile;
 import com.xindai.xindai.modules.user.mapper.UserMapper;
+import com.xindai.xindai.modules.user.mapper.UserProfileMapper;
 import com.xindai.xindai.modules.user.service.UserProfileService;
 import com.xindai.xindai.security.jwt.JwtUtils;
 import lombok.RequiredArgsConstructor;
@@ -15,14 +19,18 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class UserProfileServiceImpl implements UserProfileService {
 
     private final UserMapper userMapper;
+    private final UserProfileMapper userProfileMapper;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtils jwtUtils;
+    private final KycService kycService;
 
     @Override
     @Cacheable(value = "userById", key = "#id", unless = "#result == null")
@@ -96,12 +104,26 @@ public class UserProfileServiceImpl implements UserProfileService {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "已完成实名认证");
         }
 
-        // TODO: 调用第三方实名认证接口验证姓名和身份证号
+        // 调用KYC实名认证接口验证姓名和身份证号
+        KycResult kycResult = kycService.verify(dto.getRealName(), dto.getIdCard());
+        if (!kycResult.isSuccess()) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, kycResult.getMessage());
+        }
 
         // 更新实名信息
         user.setRealName(dto.getRealName());
         user.setIdCard(dto.getIdCard());
         userMapper.updateById(user);
+
+        // 更新user_profile中的认证状态
+        UserProfile profile = userProfileMapper.selectOne(
+                new LambdaQueryWrapper<UserProfile>().eq(UserProfile::getUserId, userId)
+        );
+        if (profile != null) {
+            profile.setIdentityStatus(2); // 已认证
+            profile.setIdentityVerifiedAt(LocalDateTime.now());
+            userProfileMapper.updateById(profile);
+        }
 
         log.info("User identity verified: userId={}", userId);
         return buildUserVO(user, null);
