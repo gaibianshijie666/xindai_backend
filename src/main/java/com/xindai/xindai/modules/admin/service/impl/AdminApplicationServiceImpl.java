@@ -3,6 +3,9 @@ package com.xindai.xindai.modules.admin.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.xindai.xindai.common.event.EventPublisher;
+import com.xindai.xindai.common.event.LoanApplicationApprovedEvent;
+import com.xindai.xindai.common.event.LoanApplicationRejectedEvent;
 import com.xindai.xindai.common.exception.BusinessException;
 import com.xindai.xindai.common.exception.ErrorCode;
 import com.xindai.xindai.modules.admin.dto.ApplicationQueryDTO;
@@ -45,6 +48,7 @@ public class AdminApplicationServiceImpl implements AdminApplicationService {
     private final RiskAssessmentMapper riskAssessmentMapper;
     private final NotificationService notificationService;
     private final AdminUserMapper adminUserMapper;
+    private final EventPublisher eventPublisher;
 
     // 申请状态常量 - 使用ApplicationStatus枚举替代
 
@@ -162,15 +166,25 @@ public class AdminApplicationServiceImpl implements AdminApplicationService {
         switch (action) {
             case "APPROVED":
                 resultText = "已通过";
+                // 发布借款申请通过事件
+                eventPublisher.publish(new LoanApplicationApprovedEvent(
+                        id, application.getUserId(), application.getAmount(), application.getAmount(), reviewNote));
                 break;
             case "REJECTED":
                 resultText = "已拒绝";
+                // 发布借款申请拒绝事件
+                eventPublisher.publish(new LoanApplicationRejectedEvent(
+                        id, application.getUserId(), application.getAmount(),
+                        (reviewNote != null && !reviewNote.isBlank()) ? reviewNote : "审核未通过"));
                 break;
             case "RETURNED":
                 resultText = "已退回，请补充材料";
                 break;
             case "CONDITIONAL":
                 resultText = "已条件性通过";
+                // 条件性通过也视为通过，发布通过事件
+                eventPublisher.publish(new LoanApplicationApprovedEvent(
+                        id, application.getUserId(), application.getAmount(), application.getAmount(), reviewNote));
                 break;
             default:
                 resultText = "已处理";

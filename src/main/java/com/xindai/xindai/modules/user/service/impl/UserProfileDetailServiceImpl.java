@@ -23,6 +23,13 @@ public class UserProfileDetailServiceImpl implements UserProfileDetailService {
     private final UserProfileMapper userProfileMapper;
 
     @Override
+    public UserProfile getUserProfileByUserId(Long userId) {
+        return userProfileMapper.selectOne(
+                new LambdaQueryWrapper<UserProfile>().eq(UserProfile::getUserId, userId)
+        );
+    }
+
+    @Override
     public UserProfileVO getProfileDetail(Long userId) {
         UserProfile profile = userProfileMapper.selectOne(
                 new LambdaQueryWrapper<UserProfile>().eq(UserProfile::getUserId, userId)

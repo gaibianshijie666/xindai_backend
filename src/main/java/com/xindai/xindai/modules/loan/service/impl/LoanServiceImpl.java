@@ -4,6 +4,9 @@ import cn.hutool.core.util.IdUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.xindai.xindai.client.model.CreditLimitPredictionClient;
 import com.xindai.xindai.common.constants.CreditLimitConstants;
+import com.xindai.xindai.common.event.EventPublisher;
+import com.xindai.xindai.common.event.LoanApplicationSubmittedEvent;
+import com.xindai.xindai.common.event.RepaymentCompletedEvent;
 import com.xindai.xindai.common.exception.BusinessException;
 import com.xindai.xindai.common.exception.ErrorCode;
 import com.xindai.xindai.config.CreditLimitProperties;
@@ -58,6 +61,7 @@ public class LoanServiceImpl implements LoanService {
     private final CacheManager cacheManager;
     private final CreditLimitProperties creditLimitProperties;
     private final NotificationService notificationService;
+    private final EventPublisher eventPublisher;
 
     @Override
     @Cacheable(value = "creditLimit", key = "#userId", unless = "#result == null")
@@ -89,6 +93,9 @@ public class LoanServiceImpl implements LoanService {
         application.setPurpose(dto.getPurpose());
         application.setStatus(ApplicationStatus.PENDING.getCode()); // 待审批
         loanApplicationMapper.insert(application);
+
+        // 发布借款申请提交事件（异步风控评估）
+        eventPublisher.publish(new LoanApplicationSubmittedEvent(application.getId(), userId, dto.getAmount(), dto.getTerm()));
 
         // 调用风控评估
         try {
@@ -676,6 +683,12 @@ public class LoanServiceImpl implements LoanService {
 
         log.info("Repayment completed: contractId={}, amount={}, periods={}",
                 contract.getId(), totalRepaid, repaidPeriods.size());
+
+        // 发布还款完成事件
+        for (RepaymentResultVO.RepaidPeriod repaidPeriod : repaidPeriods) {
+            eventPublisher.publish(new RepaymentCompletedEvent(
+                    contract.getId(), contract.getUserId(), repaidPeriod.getPeriod(), repaidPeriod.getAmount()));
+        }
 
         notificationService.send(contract.getUserId(), "USER", "还款成功",
                 "您的还款已成功处理，本次还款金额：" + totalRepaid + "元，合同编号：" + contract.getContractNo() + "。",

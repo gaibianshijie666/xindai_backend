@@ -13,8 +13,8 @@ import com.xindai.xindai.modules.risk.mapper.RiskAssessmentMapper;
 import com.xindai.xindai.modules.risk.service.RiskAssessmentService;
 import com.xindai.xindai.modules.user.entity.User;
 import com.xindai.xindai.modules.user.entity.UserProfile;
-import com.xindai.xindai.modules.user.mapper.UserMapper;
-import com.xindai.xindai.modules.user.mapper.UserProfileMapper;
+import com.xindai.xindai.modules.user.service.UserProfileDetailService;
+import com.xindai.xindai.modules.user.service.UserProfileService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -38,8 +38,8 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
     private final ModelServiceClient modelServiceClient;
     private final RiskAssessmentMapper riskAssessmentMapper;
     private final BlacklistMapper blacklistMapper;
-    private final UserMapper userMapper;
-    private final UserProfileMapper userProfileMapper;
+    private final UserProfileService userProfileService;
+    private final UserProfileDetailService userProfileDetailService;
     private final RedisTemplate<String, Object> redisTemplate;
     private final FeatureAggregationService featureAggregationService;
 
@@ -71,7 +71,7 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
             }
 
             // 1. 获取用户信息
-            User user = userMapper.selectById(userId);
+            User user = userProfileService.getById(userId);
             if (user == null) {
                 throw new BusinessException("用户不存在");
             }
@@ -169,9 +169,7 @@ public class RiskAssessmentServiceImpl implements RiskAssessmentService {
      */
     private Map<String, Float> collectFeatures(Long userId, User user) {
         // 获取用户画像数据
-        UserProfile profile = userProfileMapper.selectOne(
-                new LambdaQueryWrapper<UserProfile>().eq(UserProfile::getUserId, userId)
-        );
+        UserProfile profile = userProfileDetailService.getUserProfileByUserId(userId);
 
         // 使用聚合服务收集特征
         return featureAggregationService.collectFeatures(userId, user, profile);
