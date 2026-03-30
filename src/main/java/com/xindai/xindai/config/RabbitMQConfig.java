@@ -50,6 +50,16 @@ public class RabbitMQConfig {
     }
 
     @Bean
+    public Queue loanContractCreateQueue() {
+        return buildQueue("loan.contract.create");
+    }
+
+    @Bean
+    public Queue loanDisbursementExecuteQueue() {
+        return buildQueue("loan.disbursement.execute");
+    }
+
+    @Bean
     public Queue loanApplicationRejectedQueue() {
         return buildQueue(QueueConstants.LOAN_APPLICATION_REJECTED);
     }
@@ -81,6 +91,20 @@ public class RabbitMQConfig {
     @Bean
     public Binding loanApplicationApprovedBinding() {
         return BindingBuilder.bind(loanApplicationApprovedQueue())
+                .to(xindaiExchange())
+                .with(QueueConstants.LOAN_APPLICATION_APPROVED);
+    }
+
+    @Bean
+    public Binding loanContractCreateBinding() {
+        return BindingBuilder.bind(loanContractCreateQueue())
+                .to(xindaiExchange())
+                .with(QueueConstants.LOAN_APPLICATION_APPROVED);
+    }
+
+    @Bean
+    public Binding loanDisbursementExecuteBinding() {
+        return BindingBuilder.bind(loanDisbursementExecuteQueue())
                 .to(xindaiExchange())
                 .with(QueueConstants.LOAN_APPLICATION_APPROVED);
     }

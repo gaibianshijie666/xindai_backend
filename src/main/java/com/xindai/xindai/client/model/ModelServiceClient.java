@@ -18,7 +18,7 @@ import java.util.Map;
 @Component
 public class ModelServiceClient {
 
-    @Value("${model.service.url:http://localhost:8001}")
+    @Value("${model.service.url:http://localhost:8000}")
     private String modelServiceUrl;
 
     @Value("${model.service.timeout:5000}")

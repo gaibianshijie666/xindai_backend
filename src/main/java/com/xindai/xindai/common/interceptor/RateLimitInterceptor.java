@@ -64,6 +64,9 @@ public class RateLimitInterceptor implements HandlerInterceptor {
         PATH_CONFIGS.put("/api/v1/user/register", new RateLimitConfig(5, 60));
         PATH_CONFIGS.put("/api/v1/loan/apply", new RateLimitConfig(10, 60));
         PATH_CONFIGS.put("/api/v1/enterprise/auth/login", new RateLimitConfig(10, 60));
+        PATH_CONFIGS.put("/api/v1/enterprise/loans/apply", new RateLimitConfig(10, 60));
+        PATH_CONFIGS.put("/api/v1/enterprise/loans/batch-apply", new RateLimitConfig(5, 60));
+        PATH_CONFIGS.put("/api/v1/enterprise/credit/apply", new RateLimitConfig(3, 60));
         PATH_CONFIGS.put("/api/v1/agent/user/chat/stream", new RateLimitConfig(20, 60));
         PATH_CONFIGS.put("/api/v1/agent/enterprise/chat/stream", new RateLimitConfig(20, 60));
         PATH_CONFIGS.put("/api/v1/agent/admin/chat/stream", new RateLimitConfig(20, 60));

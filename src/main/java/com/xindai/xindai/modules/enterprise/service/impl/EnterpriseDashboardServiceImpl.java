@@ -1,6 +1,7 @@
 package com.xindai.xindai.modules.enterprise.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.xindai.xindai.common.constants.RiskConstants;
 import com.xindai.xindai.modules.enterprise.dto.DailyCustomerStats;
 import com.xindai.xindai.modules.enterprise.dto.DailyLoanStats;
@@ -18,7 +19,9 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -71,27 +74,33 @@ public class EnterpriseDashboardServiceImpl implements EnterpriseDashboardServic
     }
 
     private LoanStats getLoanStatsSince(Long enterpriseId, LocalDateTime since) {
-        List<LoanApplication> loans = loanApplicationMapper.selectList(
-                new LambdaQueryWrapper<LoanApplication>()
-                        .eq(LoanApplication::getEnterpriseId, enterpriseId)
-                        .ge(LoanApplication::getCreatedAt, since)
-        );
-        return calculateLoanStats(loans);
+        return getLoanStatsWithCondition(enterpriseId, since, null);
     }
 
     private LoanStats getTotalLoanStats(Long enterpriseId) {
-        List<LoanApplication> loans = loanApplicationMapper.selectList(
-                new LambdaQueryWrapper<LoanApplication>()
-                        .eq(LoanApplication::getEnterpriseId, enterpriseId)
-        );
-        return calculateLoanStats(loans);
+        return getLoanStatsWithCondition(enterpriseId, null, null);
     }
 
-    private LoanStats calculateLoanStats(List<LoanApplication> loans) {
-        BigDecimal amount = loans.stream()
-                .map(LoanApplication::getAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        return new LoanStats(loans.size(), amount);
+    private LoanStats getLoanStatsWithCondition(Long enterpriseId, LocalDateTime since, LocalDateTime until) {
+        QueryWrapper<LoanApplication> wrapper = new QueryWrapper<>();
+        wrapper.eq("enterprise_id", enterpriseId);
+        if (since != null) {
+            wrapper.ge("created_at", since);
+        }
+        if (until != null) {
+            wrapper.lt("created_at", until);
+        }
+        wrapper.select("COUNT(*) as count", "COALESCE(SUM(amount), 0) as totalAmount");
+
+        List<Map<String, Object>> result = loanApplicationMapper.selectMaps(wrapper);
+        if (result.isEmpty()) {
+            return new LoanStats(0, BigDecimal.ZERO);
+        }
+
+        Map<String, Object> row = result.get(0);
+        Number count = (Number) row.get("count");
+        BigDecimal amount = (BigDecimal) row.get("totalAmount");
+        return new LoanStats(count != null ? count.intValue() : 0, amount != null ? amount : BigDecimal.ZERO);
     }
 
     private DashboardOverviewVO.RiskDistribution getRiskDistribution(Long enterpriseId) {

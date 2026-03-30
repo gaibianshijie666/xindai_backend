@@ -38,7 +38,7 @@ public class EnterpriseRiskServiceImpl implements EnterpriseRiskService {
     private final EnterpriseOperationLogMapper logMapper;
 
     @Override
-    public RiskAssessResultVO assessCustomer(Long enterpriseId, Long customerId) {
+    public RiskAssessResultVO assessCustomer(Long enterpriseId, Long customerId, Long applicationId) {
         // 1. 获取客户信息
         EnterpriseCustomer customer = customerMapper.selectOne(
                 new LambdaQueryWrapper<EnterpriseCustomer>()
@@ -47,6 +47,21 @@ public class EnterpriseRiskServiceImpl implements EnterpriseRiskService {
         );
         if (customer == null) {
             throw new BusinessException(ErrorCode.ENTERPRISE_CUSTOMER_NOT_FOUND);
+        }
+
+        // M4: 风险评估限流 - 24小时内重复评估直接返回缓存结果
+        RiskAssessment lastAssessment = riskAssessmentMapper.selectOne(
+                new LambdaQueryWrapper<RiskAssessment>()
+                        .eq(RiskAssessment::getUserId, customer.getId())
+                        .orderByDesc(RiskAssessment::getCreatedAt)
+                        .last("LIMIT 1")
+        );
+        if (lastAssessment != null && lastAssessment.getCreatedAt() != null) {
+            LocalDateTime twentyFourHoursAgo = LocalDateTime.now().minusHours(24);
+            if (lastAssessment.getCreatedAt().isAfter(twentyFourHoursAgo)) {
+                log.info("Using cached risk assessment for customer {} from {}", customerId, lastAssessment.getCreatedAt());
+                return buildResultVOFromCachedAssessment(customer, lastAssessment);
+            }
         }
 
         // 2. 构建特征并调用风控模型服务
@@ -68,7 +83,7 @@ public class EnterpriseRiskServiceImpl implements EnterpriseRiskService {
         RiskAssessment assessment = new RiskAssessment();
         assessment.setAssessmentNo(generateAssessmentNo());
         assessment.setUserId(customer.getId());
-        assessment.setApplicationId(null);
+        assessment.setApplicationId(applicationId);  // 关联借款申请ID（可选）
         assessment.setAssessmentType(2); // 2-借款评估
         assessment.setRiskScore(java.math.BigDecimal.valueOf(riskScore));
         assessment.setRiskLevel(convertRiskLevel(riskLevel));
@@ -101,7 +116,8 @@ public class EnterpriseRiskServiceImpl implements EnterpriseRiskService {
         List<RiskAssessResultVO> results = new ArrayList<>();
         for (Long customerId : customerIds) {
             try {
-                results.add(assessCustomer(enterpriseId, customerId));
+                // 批量评估不关联具体申请，传null
+                results.add(assessCustomer(enterpriseId, customerId, null));
             } catch (Exception e) {
                 log.error("Failed to assess customer {}: {}", customerId, e.getMessage());
                 // 记录失败但继续处理其他客户
@@ -256,6 +272,25 @@ public class EnterpriseRiskServiceImpl implements EnterpriseRiskService {
         vo.setRiskScore(customer.getCreditScore());
         vo.setRiskLevel(customer.getRiskLevel());
         vo.setRiskAdvice(getRiskAdvice(customer.getRiskLevel()));
+        vo.setAssessTime(assessment.getCreatedAt());
+
+        // 解析风险因素
+        List<RiskAssessResultVO.RiskFactor> riskFactors = parseRiskFactors(assessment.getFactors());
+        vo.setRiskFactors(riskFactors);
+
+        return vo;
+    }
+
+    /**
+     * 从缓存的评估记录构建返回结果VO
+     */
+    private RiskAssessResultVO buildResultVOFromCachedAssessment(EnterpriseCustomer customer, RiskAssessment assessment) {
+        RiskAssessResultVO vo = new RiskAssessResultVO();
+        vo.setCustomerId(customer.getId());
+        vo.setCustomerName(customer.getRealName());
+        vo.setRiskScore(assessment.getRiskScore() != null ? assessment.getRiskScore().intValue() : customer.getCreditScore());
+        vo.setRiskLevel(convertRiskLevelToEnterprise(assessment.getRiskLevel()));
+        vo.setRiskAdvice(getRiskAdvice(vo.getRiskLevel()));
         vo.setAssessTime(assessment.getCreatedAt());
 
         // 解析风险因素

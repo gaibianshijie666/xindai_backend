@@ -9,6 +9,9 @@ import com.xindai.xindai.modules.enterprise.dto.*;
 import com.xindai.xindai.modules.enterprise.entity.EnterpriseCustomer;
 import com.xindai.xindai.modules.enterprise.mapper.EnterpriseCustomerMapper;
 import com.xindai.xindai.modules.enterprise.service.EnterpriseCustomerService;
+import com.xindai.xindai.modules.loan.entity.LoanApplication;
+import com.xindai.xindai.modules.loan.enums.ApplicationStatus;
+import com.xindai.xindai.modules.loan.mapper.LoanApplicationMapper;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
@@ -19,10 +22,13 @@ import org.springframework.util.StringUtils;
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -33,6 +39,7 @@ import java.util.stream.Collectors;
 public class EnterpriseCustomerServiceImpl implements EnterpriseCustomerService {
 
     private final EnterpriseCustomerMapper customerMapper;
+    private final LoanApplicationMapper loanApplicationMapper;
 
     @Override
     public Page<EnterpriseCustomerVO> list(Long enterpriseId, EnterpriseCustomerQueryDTO queryDTO) {
@@ -113,6 +120,7 @@ public class EnterpriseCustomerServiceImpl implements EnterpriseCustomerService 
     @Override
     public void delete(Long enterpriseId, Long customerId) {
         EnterpriseCustomer customer = getByEnterpriseAndId(enterpriseId, customerId);
+        checkActiveLoans(customerId);
         customerMapper.deleteById(customerId);
     }
 
@@ -132,14 +140,18 @@ public class EnterpriseCustomerServiceImpl implements EnterpriseCustomerService 
     @Override
     public void batchImport(Long enterpriseId, List<EnterpriseCustomerDTO> customers) {
         for (EnterpriseCustomerDTO dto : customers) {
-            try {
-                create(enterpriseId, dto);
-            } catch (BusinessException e) {
-                // 跳过已存在的客户，继续导入
-                if (!e.getMessage().contains("已存在")) {
-                    throw e;
-                }
+            // 检查客户是否已存在（通过身份证+企业ID）
+            EnterpriseCustomer existing = customerMapper.selectOne(
+                    new LambdaQueryWrapper<EnterpriseCustomer>()
+                            .eq(EnterpriseCustomer::getEnterpriseId, enterpriseId)
+                            .eq(EnterpriseCustomer::getIdCard, dto.getIdCard())
+            );
+            if (existing != null) {
+                // 客户已存在，跳过该记录
+                continue;
             }
+            // 创建新客户
+            create(enterpriseId, dto);
         }
     }
 
@@ -159,6 +171,14 @@ public class EnterpriseCustomerServiceImpl implements EnterpriseCustomerService 
                 );
                 if (customer == null) {
                     failDetails.add(new BatchOperationResultVO.FailDetail(id, "客户不存在或无权操作"));
+                    continue;
+                }
+
+                // 检查是否有进行中的贷款
+                try {
+                    checkActiveLoans(id);
+                } catch (BusinessException e) {
+                    failDetails.add(new BatchOperationResultVO.FailDetail(id, e.getMessage()));
                     continue;
                 }
 
@@ -239,7 +259,22 @@ public class EnterpriseCustomerServiceImpl implements EnterpriseCustomerService 
     }
 
     private String generateCustomerNo() {
-        return "EC" + System.currentTimeMillis() + String.format("%04d", new Random().nextInt(10000));
+        return "EC" + LocalDate.now().format(DateTimeFormatter.BASIC_ISO_DATE) + UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
+    }
+
+    private void checkActiveLoans(Long enterpriseCustomerId) {
+        Long count = loanApplicationMapper.selectCount(
+                new LambdaQueryWrapper<LoanApplication>()
+                        .eq(LoanApplication::getEnterpriseCustomerId, enterpriseCustomerId)
+                        .in(LoanApplication::getStatus,
+                                ApplicationStatus.PENDING.getCode(),
+                                ApplicationStatus.REVIEWING.getCode(),
+                                ApplicationStatus.APPROVED.getCode(),
+                                ApplicationStatus.DISBURSED.getCode())
+        );
+        if (count > 0) {
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "该客户存在进行中的贷款申请，无法删除");
+        }
     }
 
     private EnterpriseCustomerVO toVO(EnterpriseCustomer entity) {

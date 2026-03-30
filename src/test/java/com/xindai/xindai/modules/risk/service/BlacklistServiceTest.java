@@ -3,6 +3,7 @@ package com.xindai.xindai.modules.risk.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.xindai.xindai.modules.risk.entity.Blacklist;
 import com.xindai.xindai.modules.risk.mapper.BlacklistMapper;
+import com.xindai.xindai.modules.risk.service.impl.BlacklistServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -39,7 +40,7 @@ class BlacklistServiceTest {
     private SetOperations<String, Object> setOperations;
 
     @InjectMocks
-    private BlacklistService blacklistService;
+    private BlacklistServiceImpl blacklistService;
 
     private Blacklist phoneBlacklist;
     private Blacklist idCardBlacklist;

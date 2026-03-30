@@ -41,4 +41,9 @@ public interface EnterpriseAuthService {
      * 修改密码
      */
     void changePassword(Long userId, PasswordChangeDTO dto);
+
+    /**
+     * 退出登录
+     */
+    void logout(Long userId);
 }

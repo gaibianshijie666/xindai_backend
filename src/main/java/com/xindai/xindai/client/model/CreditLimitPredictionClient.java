@@ -23,7 +23,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class CreditLimitPredictionClient {
 
-    @Value("${model.service.url:http://localhost:8001}")
+    @Value("${model.service.url:http://localhost:8000}")
     private String modelServiceUrl;
 
     private final RestTemplate restTemplate;

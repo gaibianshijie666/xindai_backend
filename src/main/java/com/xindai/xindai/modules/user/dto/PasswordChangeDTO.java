@@ -2,7 +2,7 @@ package com.xindai.xindai.modules.user.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.Pattern;
 import lombok.Data;
 
 @Data
@@ -14,7 +14,8 @@ public class PasswordChangeDTO {
     private String oldPassword;
 
     @NotBlank(message = "新密码不能为空")
-    @Size(min = 6, max = 20, message = "新密码长度必须在6-20位之间")
+    @Pattern(regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)[a-zA-Z\\d!@#$%^&*()_+\\-=]{8,20}$",
+            message = "密码需8-20位，包含大小写字母和数字")
     @Schema(description = "新密码", required = true)
     private String newPassword;
 }

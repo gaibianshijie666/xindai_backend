@@ -12,8 +12,13 @@ import com.xindai.xindai.modules.loan.entity.CreditLimit;
 import com.xindai.xindai.modules.loan.entity.LoanApplication;
 import com.xindai.xindai.modules.loan.mapper.CreditLimitMapper;
 import com.xindai.xindai.modules.loan.mapper.LoanApplicationMapper;
+import com.xindai.xindai.modules.loan.mapper.LoanContractMapper;
+import com.xindai.xindai.modules.loan.mapper.RepaymentPlanMapper;
+import com.xindai.xindai.config.CreditLimitProperties;
 import com.xindai.xindai.modules.loan.service.impl.LoanServiceImpl;
 import com.xindai.xindai.modules.risk.entity.RiskAssessment;
+import com.xindai.xindai.common.event.EventPublisher;
+import com.xindai.xindai.modules.notification.service.NotificationService;
 import com.xindai.xindai.modules.risk.service.RiskAssessmentService;
 import com.xindai.xindai.modules.user.entity.UserProfile;
 import com.xindai.xindai.modules.user.mapper.UserProfileMapper;
@@ -53,6 +58,12 @@ class LoanServiceTest {
     private LoanApplicationMapper applicationMapper;
 
     @Mock
+    private LoanContractMapper loanContractMapper;
+
+    @Mock
+    private RepaymentPlanMapper repaymentPlanMapper;
+
+    @Mock
     private UserProfileMapper userProfileMapper;
 
     @Mock
@@ -66,6 +77,15 @@ class LoanServiceTest {
 
     @Mock
     private CacheManager cacheManager;
+
+    @Mock
+    private CreditLimitProperties creditLimitProperties;
+
+    @Mock
+    private NotificationService notificationService;
+
+    @Mock
+    private EventPublisher eventPublisher;
 
     @InjectMocks
     private LoanServiceImpl loanService;
@@ -95,6 +115,7 @@ class LoanServiceTest {
         userProfile.setAnnualIncome(new BigDecimal("120000"));
         userProfile.setRiskScore(50.0);
         userProfile.setCreditGrade("B");
+        userProfile.setIdentityStatus(2);
 
         riskAssessment = new RiskAssessment();
         riskAssessment.setId(1L);
@@ -126,9 +147,14 @@ class LoanServiceTest {
         void getCreditLimit_NotExists_CreatesNew() {
             when(creditLimitMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
             when(userProfileMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(userProfile);
+            when(creditLimitProperties.getInterestRate(anyString())).thenReturn(new BigDecimal("15"));
             when(limitPredictionClient.predictLimitSimple(anyLong(), any(BigDecimal.class), anyString(),
                     any(BigDecimal.class), any(BigDecimal.class))).thenReturn(new BigDecimal("30000"));
             when(creditLimitMapper.insert(any(CreditLimit.class))).thenReturn(1);
+            when(creditLimitCalculator.getCalculationDetail(any(UserProfile.class), anyDouble(), anyString()))
+                    .thenReturn(new CreditLimitCalculator.CreditLimitDetail(
+                            new BigDecimal("30000"), 0.5, 1.3, 1.0, 1.0, 1.0,
+                            new BigDecimal("30000"), "test"));
 
             CreditLimitVO result = loanService.getCreditLimit(1L);
 
@@ -141,12 +167,14 @@ class LoanServiceTest {
         void getCreditLimit_NoProfile_UseDefault() {
             when(creditLimitMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
             when(userProfileMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
+            when(creditLimitProperties.getDefaultLimit()).thenReturn(new BigDecimal("10000"));
             when(creditLimitMapper.insert(any(CreditLimit.class))).thenReturn(1);
 
             CreditLimitVO result = loanService.getCreditLimit(1L);
 
             assertNotNull(result);
             assertEquals(new BigDecimal("10000"), result.getTotalLimit());
+            verify(creditLimitMapper).insert(any(CreditLimit.class));
         }
     }
 
@@ -157,6 +185,7 @@ class LoanServiceTest {
         @Test
         @DisplayName("申请成功 - 自动审批通过")
         void apply_Success_AutoApproved() {
+            when(userProfileMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(userProfile);
             when(creditLimitMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(creditLimit);
             when(applicationMapper.insert(any(LoanApplication.class))).thenAnswer(inv -> {
                 LoanApplication app = inv.getArgument(0);
@@ -179,7 +208,10 @@ class LoanServiceTest {
         @DisplayName("申请金额超过可用额度 - 抛出异常")
         void apply_ExceedLimit_ThrowsException() {
             applyDTO.setAmount(new BigDecimal("50000"));
+            when(userProfileMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(userProfile);
             when(creditLimitMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(creditLimit);
+            when(creditLimitCalculator.adjustByRiskScore(any(BigDecimal.class), anyDouble()))
+                    .thenReturn(new BigDecimal("50000"));
 
             BusinessException exception = assertThrows(BusinessException.class,
                     () -> loanService.apply(1L, applyDTO));
@@ -191,6 +223,7 @@ class LoanServiceTest {
         @DisplayName("申请金额等于可用额度 - 成功")
         void apply_EqualToLimit_Success() {
             applyDTO.setAmount(new BigDecimal("40000"));
+            when(userProfileMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(userProfile);
             when(creditLimitMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(creditLimit);
             when(applicationMapper.insert(any(LoanApplication.class))).thenAnswer(inv -> {
                 inv.getArgument(0, LoanApplication.class).setId(1L);
@@ -199,7 +232,7 @@ class LoanServiceTest {
             when(riskAssessmentService.assess(anyLong(), anyLong(), anyInt())).thenReturn(riskAssessment);
             when(applicationMapper.updateById(any(LoanApplication.class))).thenReturn(1);
             when(creditLimitCalculator.adjustByRiskScore(any(BigDecimal.class), anyDouble()))
-                    .thenReturn(new BigDecimal("40000"));
+                    .thenReturn(new BigDecimal("50000"));
 
             LoanApplicationVO result = loanService.apply(1L, applyDTO);
 
@@ -211,6 +244,7 @@ class LoanServiceTest {
         @DisplayName("风控评估拒绝申请")
         void apply_RiskRejected() {
             riskAssessment.setDecision("REJECT");
+            when(userProfileMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(userProfile);
             when(creditLimitMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(creditLimit);
             when(applicationMapper.insert(any(LoanApplication.class))).thenAnswer(inv -> {
                 inv.getArgument(0, LoanApplication.class).setId(1L);
@@ -231,6 +265,7 @@ class LoanServiceTest {
         @DisplayName("风控评估需要人工审核")
         void apply_ManualReview() {
             riskAssessment.setDecision("MANUAL_REVIEW");
+            when(userProfileMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(userProfile);
             when(creditLimitMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(creditLimit);
             when(applicationMapper.insert(any(LoanApplication.class))).thenAnswer(inv -> {
                 inv.getArgument(0, LoanApplication.class).setId(1L);
@@ -244,13 +279,16 @@ class LoanServiceTest {
             LoanApplicationVO result = loanService.apply(1L, applyDTO);
 
             assertNotNull(result);
-            assertEquals(2, result.getStatus()); // 人工审核状态
+            assertEquals(1, result.getStatus()); // 人工审核状态(REVIEWING)
         }
 
         @Test
         @DisplayName("风控评估失败时保持待审核状态")
         void apply_RiskAssessmentFailed_KeepPending() {
+            when(userProfileMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(userProfile);
             when(creditLimitMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(creditLimit);
+            when(creditLimitCalculator.adjustByRiskScore(any(BigDecimal.class), anyDouble()))
+                    .thenReturn(new BigDecimal("50000"));
             when(applicationMapper.insert(any(LoanApplication.class))).thenAnswer(inv -> {
                 inv.getArgument(0, LoanApplication.class).setId(1L);
                 return 1;
@@ -366,6 +404,7 @@ class LoanServiceTest {
             applyDTO.setAmount(amount);
             applyDTO.setTerm(term);
 
+            when(userProfileMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(userProfile);
             when(creditLimitMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(creditLimit);
             when(applicationMapper.insert(any(LoanApplication.class))).thenAnswer(inv -> {
                 inv.getArgument(0, LoanApplication.class).setId(1L);
@@ -374,7 +413,7 @@ class LoanServiceTest {
             when(riskAssessmentService.assess(anyLong(), anyLong(), anyInt())).thenReturn(riskAssessment);
             when(applicationMapper.updateById(any(LoanApplication.class))).thenReturn(1);
             when(creditLimitCalculator.adjustByRiskScore(any(BigDecimal.class), anyDouble()))
-                    .thenReturn(new BigDecimal("45000"));
+                    .thenReturn(new BigDecimal("50000"));
 
             LoanApplicationVO result = loanService.apply(1L, applyDTO);
 
@@ -389,6 +428,7 @@ class LoanServiceTest {
             creditLimit.setAvailableLimit(new BigDecimal("10000"));
             applyDTO.setAmount(new BigDecimal("10000"));
 
+            when(userProfileMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(userProfile);
             when(creditLimitMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(creditLimit);
             when(applicationMapper.insert(any(LoanApplication.class))).thenAnswer(inv -> {
                 inv.getArgument(0, LoanApplication.class).setId(1L);
@@ -397,7 +437,7 @@ class LoanServiceTest {
             when(riskAssessmentService.assess(anyLong(), anyLong(), anyInt())).thenReturn(riskAssessment);
             when(applicationMapper.updateById(any(LoanApplication.class))).thenReturn(1);
             when(creditLimitCalculator.adjustByRiskScore(any(BigDecimal.class), anyDouble()))
-                    .thenReturn(new BigDecimal("10000"));
+                    .thenReturn(new BigDecimal("20000"));
 
             LoanApplicationVO result = loanService.apply(1L, applyDTO);
 
@@ -411,6 +451,7 @@ class LoanServiceTest {
         void apply_DifferentPurposes_Success(String purpose) {
             applyDTO.setPurpose(purpose);
 
+            when(userProfileMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(userProfile);
             when(creditLimitMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(creditLimit);
             when(applicationMapper.insert(any(LoanApplication.class))).thenAnswer(inv -> {
                 inv.getArgument(0, LoanApplication.class).setId(1L);
@@ -419,7 +460,7 @@ class LoanServiceTest {
             when(riskAssessmentService.assess(anyLong(), anyLong(), anyInt())).thenReturn(riskAssessment);
             when(applicationMapper.updateById(any(LoanApplication.class))).thenReturn(1);
             when(creditLimitCalculator.adjustByRiskScore(any(BigDecimal.class), anyDouble()))
-                    .thenReturn(new BigDecimal("45000"));
+                    .thenReturn(new BigDecimal("50000"));
 
             LoanApplicationVO result = loanService.apply(1L, applyDTO);
 
@@ -450,6 +491,7 @@ class LoanServiceTest {
         void getOrCreateCreditLimit_CreateNew() {
             when(creditLimitMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
             when(userProfileMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(userProfile);
+            when(creditLimitProperties.getInterestRate(anyString())).thenReturn(new BigDecimal("15"));
             when(limitPredictionClient.predictLimitSimple(anyLong(), any(BigDecimal.class), anyString(),
                     any(BigDecimal.class), any(BigDecimal.class))).thenReturn(new BigDecimal("30000"));
             when(creditLimitMapper.insert(any(CreditLimit.class))).thenReturn(1);

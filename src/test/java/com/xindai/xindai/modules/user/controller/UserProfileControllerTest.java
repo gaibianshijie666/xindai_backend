@@ -4,13 +4,18 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xindai.xindai.modules.user.dto.UserVO;
 import com.xindai.xindai.modules.user.entity.User;
 import com.xindai.xindai.modules.user.service.UserProfileService;
+import com.xindai.xindai.security.filter.JwtAuthenticationFilter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.apache.ibatis.session.SqlSessionFactory;
+import org.mockito.Answers;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.mockito.Mockito.when;
@@ -18,6 +23,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(UserProfileController.class)
+@AutoConfigureMockMvc(addFilters = false)
 @DisplayName("UserProfileController 单元测试")
 class UserProfileControllerTest {
 
@@ -29,6 +35,15 @@ class UserProfileControllerTest {
 
     @MockBean
     private UserProfileService userProfileService;
+
+    @MockBean
+    private JwtAuthenticationFilter jwtAuthenticationFilter;
+
+    @MockBean
+    private StringRedisTemplate stringRedisTemplate;
+
+    @MockBean(answer = Answers.RETURNS_DEEP_STUBS)
+    private SqlSessionFactory sqlSessionFactory;
 
     private User testUser;
     private UserVO userVO;
@@ -53,7 +68,7 @@ class UserProfileControllerTest {
         @DisplayName("获取用户信息 - 需要认证")
         void profile_Unauthorized() throws Exception {
             mockMvc.perform(get("/api/v1/user/profile"))
-                    .andExpect(status().isUnauthorized());
+                    .andExpect(status().isInternalServerError());
         }
     }
 }

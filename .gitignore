@@ -31,3 +31,13 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Tools (portable dependencies) ###
+../tools/erlang/
+../tools/rabbitmq/
+../tools/rabbitmq-server-*.zip
+../tools/otp_win64_*.zip
+tools/erlang/
+tools/rabbitmq/
+tools/rabbitmq-server-*.zip
+tools/otp_win64_*.zip

@@ -46,6 +46,24 @@ public class RiskAssessment {
     @TableField("processing_time_ms")
     private Integer processingTimeMs;
 
+    @TableField("confidence")
+    private BigDecimal confidence;
+
+    @TableField("overridden")
+    private Boolean overridden;
+
+    @TableField("override_decision")
+    private String overrideDecision;
+
+    @TableField("override_reason")
+    private String overrideReason;
+
+    @TableField("override_by")
+    private Long overrideBy;
+
+    @TableField("override_at")
+    private LocalDateTime overrideAt;
+
     @TableField("created_at")
     private LocalDateTime createdAt;
 }

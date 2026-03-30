@@ -1,5 +1,7 @@
 package com.xindai.xindai.modules.user.service;
 
+import com.xindai.xindai.client.kyc.KycResult;
+import com.xindai.xindai.client.kyc.KycService;
 import com.xindai.xindai.common.exception.BusinessException;
 import com.xindai.xindai.common.exception.ErrorCode;
 import com.xindai.xindai.modules.user.dto.PasswordChangeDTO;
@@ -7,7 +9,9 @@ import com.xindai.xindai.modules.user.dto.UserUpdateDTO;
 import com.xindai.xindai.modules.user.dto.UserVO;
 import com.xindai.xindai.modules.user.dto.VerifyIdentityDTO;
 import com.xindai.xindai.modules.user.entity.User;
+import com.xindai.xindai.modules.user.entity.UserProfile;
 import com.xindai.xindai.modules.user.mapper.UserMapper;
+import com.xindai.xindai.modules.user.mapper.UserProfileMapper;
 import com.xindai.xindai.modules.user.service.impl.UserProfileServiceImpl;
 import com.xindai.xindai.security.jwt.JwtUtils;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,6 +35,12 @@ class UserProfileServiceTest {
 
     @Mock
     private UserMapper userMapper;
+
+    @Mock
+    private UserProfileMapper userProfileMapper;
+
+    @Mock
+    private KycService kycService;
 
     @Mock
     private PasswordEncoder passwordEncoder;
@@ -133,6 +143,10 @@ class UserProfileServiceTest {
 
             when(userMapper.selectById(1L)).thenReturn(testUser);
             when(userMapper.updateById(any(User.class))).thenReturn(1);
+
+            KycResult kycResult = new KycResult();
+            kycResult.setSuccess(true);
+            when(kycService.verify("张三", "110101199001011234")).thenReturn(kycResult);
 
             UserVO result = userProfileService.verifyIdentity(1L, dto);
 

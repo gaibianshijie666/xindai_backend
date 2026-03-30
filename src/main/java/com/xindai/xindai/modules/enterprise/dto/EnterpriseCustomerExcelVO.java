@@ -54,8 +54,10 @@ public class EnterpriseCustomerExcelVO {
         EnterpriseCustomerExcelVO excelVO = new EnterpriseCustomerExcelVO();
         excelVO.setCustomerNo(vo.getCustomerNo());
         excelVO.setRealName(vo.getRealName());
-        excelVO.setIdCard(vo.getIdCard());
-        excelVO.setPhone(vo.getPhone());
+        // 脱敏身份证号: 前3位 + *********** + 后4位
+        excelVO.setIdCard(maskIdCard(vo.getIdCard()));
+        // 脱敏手机号: 前3位 + **** + 后4位
+        excelVO.setPhone(maskPhone(vo.getPhone()));
         excelVO.setCreditScore(vo.getCreditScore());
         excelVO.setRiskLevelText(getRiskLevelText(vo.getRiskLevel()));
         excelVO.setTotalLoanCount(vo.getTotalLoanCount());
@@ -67,12 +69,26 @@ public class EnterpriseCustomerExcelVO {
         return excelVO;
     }
 
+    private static String maskIdCard(String idCard) {
+        if (idCard == null || idCard.length() < 18) {
+            return "***";
+        }
+        return idCard.substring(0, 3) + "***********" + idCard.substring(idCard.length() - 4);
+    }
+
+    private static String maskPhone(String phone) {
+        if (phone == null || phone.length() < 11) {
+            return "***";
+        }
+        return phone.substring(0, 3) + "****" + phone.substring(phone.length() - 4);
+    }
+
     private static String getRiskLevelText(Integer riskLevel) {
         if (riskLevel == null) return "未知";
         return switch (riskLevel) {
-            case 1 -> "低风险";
-            case 2 -> "中风险";
-            case 3 -> "高风险";
+            case 0 -> "低风险";
+            case 1 -> "中风险";
+            case 2 -> "高风险";
             default -> "未知";
         };
     }

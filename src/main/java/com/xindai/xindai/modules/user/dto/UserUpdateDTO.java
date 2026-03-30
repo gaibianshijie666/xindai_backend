@@ -1,5 +1,6 @@
 package com.xindai.xindai.modules.user.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
@@ -7,10 +8,11 @@ import lombok.Data;
 @Schema(description = "用户信息更新请求")
 public class UserUpdateDTO {
 
-    @Schema(description = "真实姓名", example = "张三")
+    // 实名信息必须通过 verifyIdentity() 方法进行KYC验证，不允许直接更新
+    @JsonIgnore
     private String realName;
 
-    @Schema(description = "身份证号", example = "110101199001011234")
+    @JsonIgnore
     private String idCard;
 
     @Schema(description = "邮箱", example = "zhangsan@example.com")

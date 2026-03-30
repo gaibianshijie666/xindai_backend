@@ -7,6 +7,7 @@ import com.xindai.xindai.modules.enterprise.dto.*;
 import com.xindai.xindai.modules.enterprise.service.EnterpriseLoanService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -26,6 +27,21 @@ public class EnterpriseLoanController {
 
     private final EnterpriseLoanService loanService;
 
+    private String getClientIp(HttpServletRequest request) {
+        String ip = request.getHeader("X-Forwarded-For");
+        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getHeader("X-Real-IP");
+        }
+        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getRemoteAddr();
+        }
+        // Handle multiple IPs in X-Forwarded-For (take the first one)
+        if (ip != null && ip.contains(",")) {
+            ip = ip.split(",")[0].trim();
+        }
+        return ip;
+    }
+
     @Operation(summary = "获取借款列表")
     @GetMapping
     public Result<Page<EnterpriseLoanVO>> list(
@@ -40,8 +56,10 @@ public class EnterpriseLoanController {
     public Result<EnterpriseLoanVO> apply(
             @RequestAttribute("enterpriseId") Long enterpriseId,
             @RequestAttribute("userId") Long userId,
-            @Valid @RequestBody EnterpriseLoanApplyDTO dto) {
-        return Result.success(loanService.apply(enterpriseId, userId, dto));
+            @Valid @RequestBody EnterpriseLoanApplyDTO dto,
+            HttpServletRequest request) {
+        String ipAddress = getClientIp(request);
+        return Result.success(loanService.apply(enterpriseId, userId, dto, ipAddress));
     }
 
     @Operation(summary = "获取借款详情")
@@ -59,8 +77,10 @@ public class EnterpriseLoanController {
     public Result<BatchOperationResultVO> batchApply(
             @RequestAttribute("enterpriseId") Long enterpriseId,
             @RequestAttribute("userId") Long userId,
-            @RequestBody List<@Valid EnterpriseLoanApplyDTO> dtos) {
-        return Result.success(loanService.batchApply(enterpriseId, userId, dtos));
+            @RequestBody List<@Valid EnterpriseLoanApplyDTO> dtos,
+            HttpServletRequest request) {
+        String ipAddress = getClientIp(request);
+        return Result.success(loanService.batchApply(enterpriseId, userId, dtos, ipAddress));
     }
 
     @Operation(summary = "批量审核借款")
@@ -70,7 +90,9 @@ public class EnterpriseLoanController {
     public Result<BatchOperationResultVO> batchReview(
             @RequestAttribute("enterpriseId") Long enterpriseId,
             @RequestAttribute("userId") Long userId,
-            @Valid @RequestBody BatchReviewDTO dto) {
-        return Result.success(loanService.batchReview(enterpriseId, userId, dto));
+            @Valid @RequestBody BatchReviewDTO dto,
+            HttpServletRequest request) {
+        String ipAddress = getClientIp(request);
+        return Result.success(loanService.batchReview(enterpriseId, userId, dto, ipAddress));
     }
 }

@@ -330,7 +330,7 @@ class EnterpriseAuthServiceTest {
 
             assertEquals("张三", result.getRealName());
             assertEquals("13900139000", result.getPhone());
-            assertEquals("ADMIN", result.getRole());
+            assertEquals(1, result.getRole());  // 1=ADMIN
         }
 
         @Test

@@ -14,7 +14,6 @@ import com.xindai.xindai.modules.enterprise.mapper.EnterpriseUserMapper;
 import com.xindai.xindai.modules.enterprise.service.EnterpriseAuthService;
 import com.xindai.xindai.security.jwt.JwtUtils;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.BeanUtils;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -67,9 +66,13 @@ public class EnterpriseAuthServiceImpl implements EnterpriseAuthService {
             user.getId(), user.getUsername(), "ENTERPRISE", enterprise.getId()
         );
 
-        // 5. 构建VO
+        // 5. 构建VO - 显式设置字段，避免使用BeanUtils.copyProperties防止敏感字段泄露
         EnterpriseUserVO vo = new EnterpriseUserVO();
-        BeanUtils.copyProperties(user, vo);
+        vo.setId(user.getId());
+        vo.setUsername(user.getUsername());
+        vo.setRealName(user.getRealName());
+        vo.setPhone(user.getPhone());
+        vo.setRole(user.getRole());
         vo.setEnterpriseId(enterprise.getId());
         vo.setEnterpriseName(enterprise.getName());
         vo.setToken(token);
@@ -135,5 +138,10 @@ public class EnterpriseAuthServiceImpl implements EnterpriseAuthService {
         // 更新密码
         user.setPasswordHash(passwordEncoder.encode(dto.getNewPassword()));
         enterpriseUserMapper.updateById(user);
+    }
+
+    @Override
+    public void logout(Long userId) {
+        jwtUtils.invalidateToken(userId);
     }
 }

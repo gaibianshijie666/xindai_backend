@@ -18,7 +18,7 @@ public interface EnterpriseLoanService {
     /**
      * 代客申请借款
      */
-    EnterpriseLoanVO apply(Long enterpriseId, Long userId, EnterpriseLoanApplyDTO dto);
+    EnterpriseLoanVO apply(Long enterpriseId, Long userId, EnterpriseLoanApplyDTO dto, String ipAddress);
 
     /**
      * 获取借款详情
@@ -28,10 +28,10 @@ public interface EnterpriseLoanService {
     /**
      * 批量借款申请
      */
-    BatchOperationResultVO batchApply(Long enterpriseId, Long userId, List<EnterpriseLoanApplyDTO> dtos);
+    BatchOperationResultVO batchApply(Long enterpriseId, Long userId, List<EnterpriseLoanApplyDTO> dtos, String ipAddress);
 
     /**
      * 批量审核借款
      */
-    BatchOperationResultVO batchReview(Long enterpriseId, Long userId, BatchReviewDTO dto);
+    BatchOperationResultVO batchReview(Long enterpriseId, Long userId, BatchReviewDTO dto, String ipAddress);
 }

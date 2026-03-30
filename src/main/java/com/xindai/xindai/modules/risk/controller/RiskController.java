@@ -16,6 +16,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -126,13 +127,15 @@ public class RiskController {
 
     @Operation(
             summary = "添加黑名单",
-            description = "将指定手机号或身份证添加到黑名单"
+            description = "将指定手机号或身份证添加到黑名单（仅管理员）"
     )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "添加成功"),
-            @ApiResponse(responseCode = "400", description = "参数错误")
+            @ApiResponse(responseCode = "400", description = "参数错误"),
+            @ApiResponse(responseCode = "403", description = "权限不足")
     })
     @PostMapping("/blacklist")
+    @PreAuthorize("hasRole('ADMIN')")
     public Result<Void> addBlacklist(
             @Parameter(description = "类型：1-手机号，2-身份证", required = true, example = "1")
             @RequestParam Integer type,
@@ -146,9 +149,10 @@ public class RiskController {
 
     @Operation(
             summary = "移除黑名单",
-            description = "从黑名单中移除指定记录"
+            description = "从黑名单中移除指定记录（仅管理员）"
     )
     @DeleteMapping("/blacklist")
+    @PreAuthorize("hasRole('ADMIN')")
     public Result<Void> removeBlacklist(
             @Parameter(description = "类型：1-手机号，2-身份证", required = true, example = "1")
             @RequestParam Integer type,

@@ -4,7 +4,6 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.xindai.xindai.client.model.ModelServiceClient;
 import com.xindai.xindai.client.model.dto.PredictResponse;
-import com.xindai.xindai.client.thirdparty.DataAggregationService;
 import com.xindai.xindai.client.thirdparty.dto.ThirdPartyData;
 import com.xindai.xindai.common.exception.BusinessException;
 import com.xindai.xindai.modules.risk.entity.Blacklist;
@@ -15,8 +14,8 @@ import com.xindai.xindai.modules.risk.mapper.RiskAssessmentMapper;
 import com.xindai.xindai.modules.risk.service.impl.RiskAssessmentServiceImpl;
 import com.xindai.xindai.modules.user.entity.User;
 import com.xindai.xindai.modules.user.entity.UserProfile;
-import com.xindai.xindai.modules.user.mapper.UserMapper;
-import com.xindai.xindai.modules.user.mapper.UserProfileMapper;
+import com.xindai.xindai.modules.user.service.UserProfileService;
+import com.xindai.xindai.modules.user.service.UserProfileDetailService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -27,6 +26,8 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import com.xindai.xindai.config.CreditLimitProperties;
+import com.xindai.xindai.modules.loan.mapper.LoanApplicationMapper;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.data.redis.core.script.RedisScript;
@@ -42,6 +43,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -52,16 +54,16 @@ class RiskAssessmentServiceTest {
     private ModelServiceClient modelServiceClient;
 
     @Mock
-    private RiskAssessmentMapper assessmentMapper;
+    private RiskAssessmentMapper riskAssessmentMapper;
 
     @Mock
     private BlacklistMapper blacklistMapper;
 
     @Mock
-    private UserMapper userMapper;
+    private UserProfileService userProfileService;
 
     @Mock
-    private UserProfileMapper userProfileMapper;
+    private UserProfileDetailService userProfileDetailService;
 
     @Mock
     private RedisTemplate<String, Object> redisTemplate;
@@ -70,10 +72,13 @@ class RiskAssessmentServiceTest {
     private ValueOperations<String, Object> valueOperations;
 
     @Mock
-    private DataAggregationService dataAggregationService;
+    private FeatureAggregationService featureAggregationService;
 
     @Mock
-    private FeatureAggregationService featureAggregationService;
+    private LoanApplicationMapper loanApplicationMapper;
+
+    @Mock
+    private CreditLimitProperties creditLimitProperties;
 
     @InjectMocks
     private RiskAssessmentServiceImpl riskAssessmentService;
@@ -176,7 +181,7 @@ class RiskAssessmentServiceTest {
             when(redisTemplate.opsForValue()).thenReturn(valueOperations);
             when(valueOperations.setIfAbsent(anyString(), any(), anyLong(), any(TimeUnit.class)))
                     .thenReturn(true);
-            when(userMapper.selectById(1L)).thenReturn(null);
+            when(userProfileService.getById(1L)).thenReturn(null);
 
             BusinessException exception = assertThrows(BusinessException.class,
                     () -> riskAssessmentService.assess(1L, null, 1));
@@ -214,7 +219,7 @@ class RiskAssessmentServiceTest {
             when(redisTemplate.opsForValue()).thenReturn(valueOperations);
             when(valueOperations.setIfAbsent(anyString(), any(), anyLong(), any(TimeUnit.class)))
                     .thenReturn(true);
-            when(userMapper.selectById(1L)).thenThrow(new RuntimeException("数据库异常"));
+            when(userProfileService.getById(1L)).thenThrow(new RuntimeException("数据库异常"));
 
             assertThrows(RuntimeException.class, () -> riskAssessmentService.assess(1L, null, 1));
 
@@ -232,13 +237,13 @@ class RiskAssessmentServiceTest {
             when(redisTemplate.opsForValue()).thenReturn(valueOperations);
             when(valueOperations.setIfAbsent(anyString(), any(), anyLong(), any(TimeUnit.class)))
                     .thenReturn(true);
-            when(userMapper.selectById(1L)).thenReturn(testUser);
+            when(userProfileService.getById(1L)).thenReturn(testUser);
 
             Blacklist blacklist = new Blacklist();
             blacklist.setType(1);
             blacklist.setValue(testUser.getPhone());
             when(blacklistMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(blacklist);
-            when(assessmentMapper.insert(any(RiskAssessment.class))).thenReturn(1);
+            when(riskAssessmentMapper.insert(any(RiskAssessment.class))).thenReturn(1);
 
             RiskAssessment result = riskAssessmentService.assess(1L, null, 1);
 
@@ -253,13 +258,13 @@ class RiskAssessmentServiceTest {
             when(redisTemplate.opsForValue()).thenReturn(valueOperations);
             when(valueOperations.setIfAbsent(anyString(), any(), anyLong(), any(TimeUnit.class)))
                     .thenReturn(true);
-            when(userMapper.selectById(1L)).thenReturn(testUser);
+            when(userProfileService.getById(1L)).thenReturn(testUser);
 
             // 手机号不在黑名单
             when(blacklistMapper.selectOne(any(LambdaQueryWrapper.class)))
                     .thenReturn(null)  // 手机号查询返回null
                     .thenReturn(new Blacklist());  // 身份证查询返回存在
-            when(assessmentMapper.insert(any(RiskAssessment.class))).thenReturn(1);
+            when(riskAssessmentMapper.insert(any(RiskAssessment.class))).thenReturn(1);
 
             RiskAssessment result = riskAssessmentService.assess(1L, null, 1);
 
@@ -298,7 +303,7 @@ class RiskAssessmentServiceTest {
             ));
 
             setupSuccessfulAssessMocks();
-            when(userProfileMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(userProfile);
+            when(userProfileDetailService.getUserProfileByUserId(1L)).thenReturn(userProfile);
 
             RiskAssessment result = riskAssessmentService.assess(1L, null, 1);
 
@@ -310,7 +315,7 @@ class RiskAssessmentServiceTest {
         @DisplayName("无用户画像时使用默认特征")
         void assess_NoProfile_UseDefaultFeatures() {
             setupSuccessfulAssessMocks();
-            when(userProfileMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
+            when(userProfileDetailService.getUserProfileByUserId(1L)).thenReturn(null);
 
             RiskAssessment result = riskAssessmentService.assess(1L, null, 1);
 
@@ -326,7 +331,7 @@ class RiskAssessmentServiceTest {
             userProfile.setCreditGrade(null);
 
             setupSuccessfulAssessMocks();
-            when(userProfileMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(userProfile);
+            when(userProfileDetailService.getUserProfileByUserId(1L)).thenReturn(userProfile);
 
             RiskAssessment result = riskAssessmentService.assess(1L, null, 1);
 
@@ -383,7 +388,7 @@ class RiskAssessmentServiceTest {
             assessment2.setId(2L);
             assessment2.setUserId(1L);
 
-            when(assessmentMapper.selectPage(any(Page.class), any(LambdaQueryWrapper.class)))
+            when(riskAssessmentMapper.selectPage(any(Page.class), any(LambdaQueryWrapper.class)))
                     .thenReturn(new Page<>(1, 20, 2).setRecords(List.of(assessment1, assessment2)));
 
             var result = riskAssessmentService.getAssessmentHistory(1L, 1, 20);
@@ -395,7 +400,7 @@ class RiskAssessmentServiceTest {
         @Test
         @DisplayName("用户无评估历史返回空列表")
         void getAssessmentHistory_Empty() {
-            when(assessmentMapper.selectPage(any(Page.class), any(LambdaQueryWrapper.class)))
+            when(riskAssessmentMapper.selectPage(any(Page.class), any(LambdaQueryWrapper.class)))
                     .thenReturn(new Page<>(1, 20, 0).setRecords(List.of()));
 
             var result = riskAssessmentService.getAssessmentHistory(1L, 1, 20);
@@ -412,7 +417,14 @@ class RiskAssessmentServiceTest {
         @Test
         @DisplayName("模型服务不可用时抛出异常")
         void assess_ModelServiceUnavailable_ThrowsException() {
-            setupSuccessfulAssessMocks();
+            when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+            when(valueOperations.setIfAbsent(anyString(), any(), anyLong(), any(TimeUnit.class)))
+                    .thenReturn(true);
+            when(userProfileService.getById(1L)).thenReturn(testUser);
+            when(blacklistMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
+            when(userProfileDetailService.getUserProfileByUserId(1L)).thenReturn(userProfile);
+            when(featureAggregationService.collectFeatures(anyLong(), any(User.class), any()))
+                    .thenReturn(new HashMap<>());
             when(modelServiceClient.predict(anyString(), any(Map.class)))
                     .thenThrow(new RuntimeException("Model service unavailable"));
 
@@ -433,11 +445,11 @@ class RiskAssessmentServiceTest {
             when(redisTemplate.opsForValue()).thenReturn(valueOperations);
             when(valueOperations.setIfAbsent(anyString(), any(), anyLong(), any(TimeUnit.class)))
                     .thenReturn(true);
-            when(userMapper.selectById(1L)).thenReturn(testUser);
+            when(userProfileService.getById(1L)).thenReturn(testUser);
             when(blacklistMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
-            when(userProfileMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(userProfile);
+            when(userProfileDetailService.getUserProfileByUserId(1L)).thenReturn(userProfile);
             when(modelServiceClient.predict(anyString(), any(Map.class))).thenReturn(mockResponse);
-            when(assessmentMapper.insert(any(RiskAssessment.class))).thenReturn(1);
+            when(riskAssessmentMapper.insert(any(RiskAssessment.class))).thenReturn(1);
 
             // 执行第一次评估
             RiskAssessment result1 = riskAssessmentService.assess(1L, null, 1);
@@ -513,7 +525,7 @@ class RiskAssessmentServiceTest {
             assertNotNull(result.getFactors());
 
             // 验证mapper被调用
-            verify(assessmentMapper).insert(any(RiskAssessment.class));
+            verify(riskAssessmentMapper).insert(any(RiskAssessment.class));
         }
     }
 
@@ -528,7 +540,7 @@ class RiskAssessmentServiceTest {
             assessment.setAssessmentNo("RA123456");
             assessment.setUserId(1L);
 
-            when(assessmentMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(assessment);
+            when(riskAssessmentMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(assessment);
 
             RiskAssessment result = riskAssessmentService.getByAssessmentNo("RA123456");
 
@@ -539,7 +551,7 @@ class RiskAssessmentServiceTest {
         @Test
         @DisplayName("评估号不存在返回null")
         void getByAssessmentNo_NotFound() {
-            when(assessmentMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
+            when(riskAssessmentMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
 
             RiskAssessment result = riskAssessmentService.getByAssessmentNo("NOT_EXIST");
 
@@ -579,12 +591,14 @@ class RiskAssessmentServiceTest {
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         when(valueOperations.setIfAbsent(anyString(), any(), anyLong(), any(TimeUnit.class)))
                 .thenReturn(true);
-        when(userMapper.selectById(1L)).thenReturn(testUser);
+        when(userProfileService.getById(1L)).thenReturn(testUser);
         when(blacklistMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
-        when(userProfileMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(userProfile);
-        when(featureAggregationService.collectFeatures(anyLong(), any(User.class), any(UserProfile.class)))
+        when(userProfileDetailService.getUserProfileByUserId(1L)).thenReturn(userProfile);
+        when(featureAggregationService.collectFeatures(anyLong(), any(User.class), any()))
                 .thenReturn(new HashMap<>());
+        lenient().when(loanApplicationMapper.selectById(anyLong())).thenReturn(null);
+        lenient().when(creditLimitProperties.getInterestRate(any())).thenReturn(new BigDecimal("14"));
         when(modelServiceClient.predict(anyString(), any(Map.class))).thenReturn(mockResponse);
-        when(assessmentMapper.insert(any(RiskAssessment.class))).thenReturn(1);
+        when(riskAssessmentMapper.insert(any(RiskAssessment.class))).thenReturn(1);
     }
 }

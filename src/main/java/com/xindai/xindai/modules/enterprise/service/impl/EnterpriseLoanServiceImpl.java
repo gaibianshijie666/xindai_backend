@@ -15,6 +15,8 @@ import com.xindai.xindai.modules.enterprise.service.EnterpriseLoanService;
 import com.xindai.xindai.modules.loan.entity.LoanApplication;
 import com.xindai.xindai.modules.loan.enums.ApplicationStatus;
 import com.xindai.xindai.modules.loan.mapper.LoanApplicationMapper;
+import com.xindai.xindai.modules.risk.entity.RiskAssessment;
+import com.xindai.xindai.modules.risk.mapper.RiskAssessmentMapper;
 import com.xindai.xindai.modules.risk.service.RiskAssessmentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
@@ -22,10 +24,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -40,6 +45,7 @@ public class EnterpriseLoanServiceImpl implements EnterpriseLoanService {
     private final EnterpriseMapper enterpriseMapper;
     private final EnterpriseOperationLogMapper logMapper;
     private final RiskAssessmentService riskAssessmentService;
+    private final RiskAssessmentMapper riskAssessmentMapper;
 
     @Override
     public Page<EnterpriseLoanVO> list(Long enterpriseId, EnterpriseLoanQueryDTO queryDTO) {
@@ -64,7 +70,7 @@ public class EnterpriseLoanServiceImpl implements EnterpriseLoanService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public EnterpriseLoanVO apply(Long enterpriseId, Long userId, EnterpriseLoanApplyDTO dto) {
+    public EnterpriseLoanVO apply(Long enterpriseId, Long userId, EnterpriseLoanApplyDTO dto, String ipAddress) {
         // 1. 获取客户信息
         EnterpriseCustomer customer = customerMapper.selectOne(
                 new LambdaQueryWrapper<EnterpriseCustomer>()
@@ -75,13 +81,25 @@ public class EnterpriseLoanServiceImpl implements EnterpriseLoanService {
             throw new BusinessException(ErrorCode.ENTERPRISE_CUSTOMER_NOT_FOUND);
         }
 
-        // 2. 检查企业额度
-        Enterprise enterprise = enterpriseMapper.selectById(enterpriseId);
-        if (enterprise.getUsedLimit().add(dto.getAmount()).compareTo(enterprise.getCreditLimit()) > 0) {
-            throw new BusinessException(ErrorCode.ENTERPRISE_CREDIT_LIMIT_EXCEEDED);
+        // 2. 强制风险评估检查：查询最近的风险评估记录
+        RiskAssessment latestAssessment = riskAssessmentMapper.selectOne(
+                new LambdaQueryWrapper<RiskAssessment>()
+                        .eq(RiskAssessment::getUserId, customer.getId())
+                        .orderByDesc(RiskAssessment::getCreatedAt)
+                        .last("LIMIT 1")
+        );
+
+        LocalDateTime thirtyDaysAgo = LocalDateTime.now().minusDays(30);
+        if (latestAssessment == null || latestAssessment.getCreatedAt().isBefore(thirtyDaysAgo)) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "请先对该客户进行风险评估");
         }
 
-        // 3. 创建借款申请
+        // 3. 检查客户风险等级：2为高风险（企业使用0-低 1-中 2-高）
+        if (customer.getRiskLevel() != null && customer.getRiskLevel() == 2) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "该客户风险等级过高，无法申请借款");
+        }
+
+        // 4. 创建借款申请（待审批状态，不扣减额度）
         LoanApplication application = new LoanApplication();
         application.setEnterpriseId(enterpriseId);
         application.setEnterpriseCustomerId(dto.getEnterpriseCustomerId());
@@ -93,12 +111,8 @@ public class EnterpriseLoanServiceImpl implements EnterpriseLoanService {
         application.setCreatedAt(LocalDateTime.now());
         loanApplicationMapper.insert(application);
 
-        // 4. 更新企业已用额度
-        enterprise.setUsedLimit(enterprise.getUsedLimit().add(dto.getAmount()));
-        enterpriseMapper.updateById(enterprise);
-
         // 5. 记录操作日志
-        saveOperationLog(enterpriseId, userId, "LOAN_APPLY", application.getId());
+        saveOperationLog(enterpriseId, userId, "LOAN_APPLY", application.getId(), ipAddress);
 
         return toVOWithCustomer(application, customer);
     }
@@ -120,25 +134,9 @@ public class EnterpriseLoanServiceImpl implements EnterpriseLoanService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public BatchOperationResultVO batchApply(Long enterpriseId, Long userId, List<EnterpriseLoanApplyDTO> dtos) {
+    public BatchOperationResultVO batchApply(Long enterpriseId, Long userId, List<EnterpriseLoanApplyDTO> dtos, String ipAddress) {
         List<BatchOperationResultVO.FailDetail> failDetails = new ArrayList<>();
         int successCount = 0;
-
-        // 预先获取企业信息
-        Enterprise enterprise = enterpriseMapper.selectById(enterpriseId);
-        if (enterprise == null) {
-            throw new BusinessException(ErrorCode.ENTERPRISE_NOT_FOUND);
-        }
-
-        // 计算总申请金额
-        BigDecimal totalAmount = dtos.stream()
-                .map(EnterpriseLoanApplyDTO::getAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        // 检查企业额度
-        if (enterprise.getUsedLimit().add(totalAmount).compareTo(enterprise.getCreditLimit()) > 0) {
-            throw new BusinessException(ErrorCode.ENTERPRISE_CREDIT_LIMIT_EXCEEDED, "批量申请总额超过企业剩余额度");
-        }
 
         for (EnterpriseLoanApplyDTO dto : dtos) {
             try {
@@ -153,7 +151,7 @@ public class EnterpriseLoanServiceImpl implements EnterpriseLoanService {
                     continue;
                 }
 
-                // 创建借款申请
+                // 创建借款申请（待审批状态，不扣减额度）
                 LoanApplication application = new LoanApplication();
                 application.setEnterpriseId(enterpriseId);
                 application.setEnterpriseCustomerId(dto.getEnterpriseCustomerId());
@@ -165,11 +163,8 @@ public class EnterpriseLoanServiceImpl implements EnterpriseLoanService {
                 application.setCreatedAt(LocalDateTime.now());
                 loanApplicationMapper.insert(application);
 
-                // 更新企业已用额度
-                enterprise.setUsedLimit(enterprise.getUsedLimit().add(dto.getAmount()));
-
                 // 记录操作日志
-                saveOperationLog(enterpriseId, userId, "BATCH_LOAN_APPLY", application.getId());
+                saveOperationLog(enterpriseId, userId, "BATCH_LOAN_APPLY", application.getId(), ipAddress);
 
                 successCount++;
             } catch (Exception e) {
@@ -177,17 +172,18 @@ public class EnterpriseLoanServiceImpl implements EnterpriseLoanService {
             }
         }
 
-        // 批量更新企业已用额度
-        if (successCount > 0) {
-            enterpriseMapper.updateById(enterprise);
-        }
-
         return BatchOperationResultVO.of(dtos.size(), successCount, failDetails);
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public BatchOperationResultVO batchReview(Long enterpriseId, Long userId, BatchReviewDTO dto) {
+    public BatchOperationResultVO batchReview(Long enterpriseId, Long userId, BatchReviewDTO dto, String ipAddress) {
+        // 验证审核状态：仅支持通过(2)或拒绝(3)
+        if (dto.getStatus() != ApplicationStatus.APPROVED.getCode()
+                && dto.getStatus() != ApplicationStatus.REJECTED.getCode()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "审核状态仅支持通过(2)或拒绝(3)");
+        }
+
         List<BatchOperationResultVO.FailDetail> failDetails = new ArrayList<>();
         int successCount = 0;
 
@@ -209,12 +205,25 @@ public class EnterpriseLoanServiceImpl implements EnterpriseLoanService {
                     continue;
                 }
 
+                // 根据审核状态处理额度
+                if (dto.getStatus() == ApplicationStatus.APPROVED.getCode()) {
+                    // 通过：原子扣减额度
+                    int affected = enterpriseMapper.deductUsedLimit(enterpriseId, application.getAmount());
+                    if (affected == 0) {
+                        failDetails.add(new BatchOperationResultVO.FailDetail(loanId, "企业剩余额度不足"));
+                        continue;
+                    }
+                } else if (dto.getStatus() == ApplicationStatus.REJECTED.getCode()) {
+                    // 拒绝：不需要扣减额度（申请时未扣减）
+                }
+
                 application.setStatus(dto.getStatus());
                 application.setReviewedAt(LocalDateTime.now());
+                application.setReviewerId(userId);
                 loanApplicationMapper.updateById(application);
 
                 // 记录操作日志
-                saveOperationLog(enterpriseId, userId, "BATCH_LOAN_REVIEW", application.getId());
+                saveOperationLog(enterpriseId, userId, "BATCH_LOAN_REVIEW", application.getId(), ipAddress);
 
                 successCount++;
             } catch (Exception e) {
@@ -231,7 +240,7 @@ public class EnterpriseLoanServiceImpl implements EnterpriseLoanService {
     }
 
     private String generateApplicationNo() {
-        return "EL" + System.currentTimeMillis() + String.format("%04d", new Random().nextInt(10000));
+        return "EL" + LocalDate.now().format(DateTimeFormatter.BASIC_ISO_DATE) + UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
     }
 
     private EnterpriseLoanVO toVO(LoanApplication app) {
@@ -249,13 +258,14 @@ public class EnterpriseLoanServiceImpl implements EnterpriseLoanService {
         return vo;
     }
 
-    private void saveOperationLog(Long enterpriseId, Long userId, String operationType, Long targetId) {
+    private void saveOperationLog(Long enterpriseId, Long userId, String operationType, Long targetId, String ipAddress) {
         EnterpriseOperationLog log = new EnterpriseOperationLog();
         log.setEnterpriseId(enterpriseId);
         log.setUserId(userId);
         log.setOperationType(operationType);
         log.setTargetType("LOAN_APPLICATION");
         log.setTargetId(targetId);
+        log.setIpAddress(ipAddress);
         log.setCreatedAt(LocalDateTime.now());
         logMapper.insert(log);
     }

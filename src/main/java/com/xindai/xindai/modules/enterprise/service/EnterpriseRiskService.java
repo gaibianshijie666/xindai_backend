@@ -14,11 +14,12 @@ public interface EnterpriseRiskService {
     /**
      * 评估单个客户风险
      *
-     * @param enterpriseId 企业ID
-     * @param customerId   客户ID
+     * @param enterpriseId  企业ID
+     * @param customerId    客户ID
+     * @param applicationId 关联的借款申请ID（可选，用于关联评估记录）
      * @return 风险评估结果
      */
-    RiskAssessResultVO assessCustomer(Long enterpriseId, Long customerId);
+    RiskAssessResultVO assessCustomer(Long enterpriseId, Long customerId, Long applicationId);
 
     /**
      * 批量评估客户风险

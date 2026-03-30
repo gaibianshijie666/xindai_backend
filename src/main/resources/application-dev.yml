@@ -34,6 +34,7 @@ spring:
       port: 6379
       database: 0
       timeout: 10000ms
+      password: chen
       # Redis caching optimization
       lettuce:
         pool:
@@ -41,6 +42,7 @@ spring:
           max-idle: 8
           min-idle: 0
           max-wait: -1ms
+
 
   # 邮件配置 (dev)
   mail:

@@ -7,13 +7,18 @@ import com.xindai.xindai.modules.user.dto.UserLoginDTO;
 import com.xindai.xindai.modules.user.dto.UserRegisterDTO;
 import com.xindai.xindai.modules.user.dto.UserVO;
 import com.xindai.xindai.modules.user.service.UserAuthService;
+import com.xindai.xindai.security.filter.JwtAuthenticationFilter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.apache.ibatis.session.SqlSessionFactory;
+import org.mockito.Answers;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -23,6 +28,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(UserAuthController.class)
+@AutoConfigureMockMvc(addFilters = false)
 @DisplayName("UserAuthController 单元测试")
 class UserAuthControllerTest {
 
@@ -35,6 +41,15 @@ class UserAuthControllerTest {
     @MockBean
     private UserAuthService userAuthService;
 
+    @MockBean
+    private JwtAuthenticationFilter jwtAuthenticationFilter;
+
+    @MockBean
+    private StringRedisTemplate stringRedisTemplate;
+
+    @MockBean(answer = Answers.RETURNS_DEEP_STUBS)
+    private SqlSessionFactory sqlSessionFactory;
+
     private UserRegisterDTO registerDTO;
     private UserLoginDTO loginDTO;
     private UserVO userVO;
@@ -43,7 +58,7 @@ class UserAuthControllerTest {
     void setUp() {
         registerDTO = new UserRegisterDTO();
         registerDTO.setPhone("13800138000");
-        registerDTO.setPassword("password123");
+        registerDTO.setPassword("Password123");
 
         loginDTO = new UserLoginDTO();
         loginDTO.setPhone("13800138000");
@@ -69,7 +84,7 @@ class UserAuthControllerTest {
                             .content(objectMapper.writeValueAsString(registerDTO)))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.code").value(200))
-                    .andExpect(jsonPath("$.data.phone").value("13800138000"))
+                    .andExpect(jsonPath("$.data.phone").value("138****8000"))
                     .andExpect(jsonPath("$.data.token").exists());
         }
 

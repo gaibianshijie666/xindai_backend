@@ -29,6 +29,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -53,11 +54,17 @@ public class ReportServiceImpl implements ReportService {
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
     @Override
-    public void exportLoanLedger(HttpServletResponse response) {
-        List<LoanContract> contracts = loanContractMapper.selectList(
-                new LambdaQueryWrapper<LoanContract>()
-                        .orderByDesc(LoanContract::getCreatedAt)
-        );
+    public void exportLoanLedger(HttpServletResponse response, String startDate, String endDate) {
+        LambdaQueryWrapper<LoanContract> wrapper = new LambdaQueryWrapper<>();
+        if (startDate != null && !startDate.isEmpty()) {
+            wrapper.ge(LoanContract::getCreatedAt, parseStartDateTime(startDate));
+        }
+        if (endDate != null && !endDate.isEmpty()) {
+            wrapper.lt(LoanContract::getCreatedAt, parseEndDateTime(endDate));
+        }
+        wrapper.orderByDesc(LoanContract::getCreatedAt);
+
+        List<LoanContract> contracts = loanContractMapper.selectList(wrapper);
 
         List<LoanLedgerExcelVO> excelVOList = contracts.stream()
                 .map(this::toLoanLedgerVO)
@@ -67,13 +74,19 @@ public class ReportServiceImpl implements ReportService {
     }
 
     @Override
-    public void exportOverdueReport(HttpServletResponse response) {
+    public void exportOverdueReport(HttpServletResponse response, String startDate, String endDate) {
         // 查询所有逾期的还款计划
-        List<RepaymentPlan> overduePlans = repaymentPlanMapper.selectList(
-                new LambdaQueryWrapper<RepaymentPlan>()
-                        .eq(RepaymentPlan::getStatus, RepaymentStatus.OVERDUE.getCode())
-                        .orderByDesc(RepaymentPlan::getDueDate)
-        );
+        LambdaQueryWrapper<RepaymentPlan> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(RepaymentPlan::getStatus, RepaymentStatus.OVERDUE.getCode());
+        if (startDate != null && !startDate.isEmpty()) {
+            wrapper.ge(RepaymentPlan::getDueDate, parseLocalDate(startDate));
+        }
+        if (endDate != null && !endDate.isEmpty()) {
+            wrapper.le(RepaymentPlan::getDueDate, parseLocalDate(endDate));
+        }
+        wrapper.orderByDesc(RepaymentPlan::getDueDate);
+
+        List<RepaymentPlan> overduePlans = repaymentPlanMapper.selectList(wrapper);
 
         List<OverdueReportExcelVO> excelVOList = overduePlans.stream()
                 .map(this::toOverdueReportVO)
@@ -83,29 +96,38 @@ public class ReportServiceImpl implements ReportService {
     }
 
     @Override
-    public void exportRiskStats(HttpServletResponse response) {
+    public void exportRiskStats(HttpServletResponse response, String startDate, String endDate) {
+        // Build date filter wrapper
+        LambdaQueryWrapper<RiskAssessment> dateWrapper = new LambdaQueryWrapper<>();
+        if (startDate != null && !startDate.isEmpty()) {
+            dateWrapper.ge(RiskAssessment::getCreatedAt, parseStartDateTime(startDate));
+        }
+        if (endDate != null && !endDate.isEmpty()) {
+            dateWrapper.lt(RiskAssessment::getCreatedAt, parseEndDateTime(endDate));
+        }
+
         List<RiskStatsExcelVO> statsList = new ArrayList<>();
 
         // 总评估数
-        Long totalAssessments = riskAssessmentMapper.selectCount(null);
+        Long totalAssessments = riskAssessmentMapper.selectCount(dateWrapper);
         statsList.add(toRiskStatVO("总风控评估数", String.valueOf(totalAssessments), "系统累计完成的风控评估总数"));
 
         // 通过数
-        Long approvedCount = riskAssessmentMapper.selectCount(
-                new LambdaQueryWrapper<RiskAssessment>().eq(RiskAssessment::getDecision, "APPROVE")
-        );
+        LambdaQueryWrapper<RiskAssessment> approvedWrapper = dateWrapper.clone();
+        approvedWrapper.eq(RiskAssessment::getDecision, "APPROVE");
+        Long approvedCount = riskAssessmentMapper.selectCount(approvedWrapper);
         statsList.add(toRiskStatVO("自动通过数", String.valueOf(approvedCount), "风控模型自动决策通过的申请数"));
 
         // 拒绝数
-        Long rejectedCount = riskAssessmentMapper.selectCount(
-                new LambdaQueryWrapper<RiskAssessment>().eq(RiskAssessment::getDecision, "REJECT")
-        );
+        LambdaQueryWrapper<RiskAssessment> rejectedWrapper = dateWrapper.clone();
+        rejectedWrapper.eq(RiskAssessment::getDecision, "REJECT");
+        Long rejectedCount = riskAssessmentMapper.selectCount(rejectedWrapper);
         statsList.add(toRiskStatVO("自动拒绝数", String.valueOf(rejectedCount), "风控模型自动决策拒绝的申请数"));
 
         // 人工审核数
-        Long manualCount = riskAssessmentMapper.selectCount(
-                new LambdaQueryWrapper<RiskAssessment>().eq(RiskAssessment::getDecision, "MANUAL_REVIEW")
-        );
+        LambdaQueryWrapper<RiskAssessment> manualWrapper = dateWrapper.clone();
+        manualWrapper.eq(RiskAssessment::getDecision, "MANUAL_REVIEW");
+        Long manualCount = riskAssessmentMapper.selectCount(manualWrapper);
         statsList.add(toRiskStatVO("人工审核数", String.valueOf(manualCount), "转由人工审核的申请数"));
 
         // 通过率
@@ -117,7 +139,7 @@ public class ReportServiceImpl implements ReportService {
         }
 
         // 平均风险评分
-        List<RiskAssessment> assessments = riskAssessmentMapper.selectList(null);
+        List<RiskAssessment> assessments = riskAssessmentMapper.selectList(dateWrapper);
         if (!assessments.isEmpty()) {
             double avgScore = assessments.stream()
                     .filter(a -> a.getRiskScore() != null)
@@ -131,9 +153,17 @@ public class ReportServiceImpl implements ReportService {
     }
 
     @Override
-    public void exportCollectionPerformance(HttpServletResponse response) {
+    public void exportCollectionPerformance(HttpServletResponse response, String startDate, String endDate) {
         // 查询所有催收任务
-        List<CollectionTask> tasks = collectionTaskMapper.selectList(null);
+        LambdaQueryWrapper<CollectionTask> wrapper = new LambdaQueryWrapper<>();
+        if (startDate != null && !startDate.isEmpty()) {
+            wrapper.ge(CollectionTask::getCreatedAt, parseStartDateTime(startDate));
+        }
+        if (endDate != null && !endDate.isEmpty()) {
+            wrapper.lt(CollectionTask::getCreatedAt, parseEndDateTime(endDate));
+        }
+
+        List<CollectionTask> tasks = collectionTaskMapper.selectList(wrapper);
 
         // 按催收员分组
         Map<Long, List<CollectionTask>> tasksByCollector = tasks.stream()
@@ -291,5 +321,17 @@ public class ReportServiceImpl implements ReportService {
             log.error("Failed to export Excel: {}", fileName, e);
             throw new BusinessException(ErrorCode.INTERNAL_ERROR, "导出Excel失败");
         }
+    }
+
+    private LocalDateTime parseStartDateTime(String dateStr) {
+        return LocalDate.parse(dateStr, DATE_FORMATTER).atStartOfDay();
+    }
+
+    private LocalDateTime parseEndDateTime(String dateStr) {
+        return LocalDate.parse(dateStr, DATE_FORMATTER).plusDays(1).atStartOfDay();
+    }
+
+    private LocalDate parseLocalDate(String dateStr) {
+        return LocalDate.parse(dateStr, DATE_FORMATTER);
     }
 }

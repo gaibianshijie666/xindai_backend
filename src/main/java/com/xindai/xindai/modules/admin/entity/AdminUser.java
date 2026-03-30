@@ -29,4 +29,7 @@ public class AdminUser {
 
     @TableField("updated_at")
     private LocalDateTime updatedAt;
+
+    @TableField("last_login_at")
+    private LocalDateTime lastLoginAt;
 }

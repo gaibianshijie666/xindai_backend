@@ -8,6 +8,8 @@ server:
     enabled: true
 
 spring:
+  profiles:
+    active: dev
   application:
     name: xindai
 
@@ -103,3 +105,8 @@ file:
     path: ./uploads
     max-size: 10MB
     allowed-types: image/jpeg,image/png,image/gif,application/pdf
+
+# JWT 配置 (default fallback)
+jwt:
+  secret: xindai-dev-secret-key-for-jwt-token-generation-must-be-at-least-256-bits
+  expiration: 7200000

@@ -12,6 +12,6 @@ public class EnterpriseLoginDTO {
     @NotBlank(message = "密码不能为空")
     private String password;
 
-    @NotNull(message = "企业编号不能为空")
+    @NotBlank(message = "企业编号不能为空")
     private String enterpriseNo;
 }

@@ -1,19 +1,28 @@
 package com.xindai.xindai.modules.admin.service;
 
+import com.baomidou.mybatisplus.core.exceptions.MybatisPlusException;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.xindai.xindai.common.exception.BusinessException;
 import com.xindai.xindai.common.exception.ErrorCode;
 import com.xindai.xindai.modules.admin.dto.ApplicationQueryDTO;
 import com.xindai.xindai.modules.admin.dto.ApplicationReviewDTO;
+import com.xindai.xindai.common.event.EventPublisher;
+import com.xindai.xindai.modules.admin.entity.AdminUser;
+import com.xindai.xindai.modules.admin.mapper.AdminUserMapper;
 import com.xindai.xindai.modules.admin.service.impl.AdminApplicationServiceImpl;
 import com.xindai.xindai.modules.admin.vo.AdminApplicationVO;
 import com.xindai.xindai.modules.loan.entity.LoanApplication;
 import com.xindai.xindai.modules.loan.mapper.LoanApplicationMapper;
+import com.xindai.xindai.modules.notification.service.NotificationService;
 import com.xindai.xindai.modules.risk.entity.RiskAssessment;
 import com.xindai.xindai.modules.risk.mapper.RiskAssessmentMapper;
 import com.xindai.xindai.modules.user.entity.User;
 import com.xindai.xindai.modules.user.mapper.UserMapper;
+import org.apache.ibatis.builder.MapperBuilderAssistant;
+import org.apache.ibatis.session.Configuration;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -51,12 +60,42 @@ class AdminApplicationServiceImplTest {
     @Mock
     private RiskAssessmentMapper riskAssessmentMapper;
 
+    @Mock
+    private NotificationService notificationService;
+
+    @Mock
+    private AdminUserMapper adminUserMapper;
+
+    @Mock
+    private EventPublisher eventPublisher;
+
     @InjectMocks
     private AdminApplicationServiceImpl adminApplicationService;
+
+    @BeforeAll
+    static void initMybatisPlusCache() {
+        try {
+            TableInfoHelper.initTableInfo(new BuilderAdapter(), LoanApplication.class);
+        } catch (MybatisPlusException e) {
+            // Already initialized, ignore
+        }
+        try {
+            TableInfoHelper.initTableInfo(new BuilderAdapter(), RiskAssessment.class);
+        } catch (MybatisPlusException e) {
+            // Already initialized, ignore
+        }
+    }
+
+    private static class BuilderAdapter extends MapperBuilderAssistant {
+        BuilderAdapter() {
+            super(new Configuration(), "");
+        }
+    }
 
     private LoanApplication testApplication;
     private User testUser;
     private RiskAssessment testRiskAssessment;
+    private AdminUser testReviewer;
 
     @BeforeEach
     void setUp() {
@@ -69,6 +108,7 @@ class AdminApplicationServiceImplTest {
         testApplication.setPurpose("个人消费");
         testApplication.setStatus(0);
         testApplication.setCreatedAt(LocalDateTime.now());
+        testApplication.setReviewerId(200L);
 
         testUser = new User();
         testUser.setId(100L);
@@ -79,6 +119,10 @@ class AdminApplicationServiceImplTest {
         testRiskAssessment.setId(1L);
         testRiskAssessment.setApplicationId(1L);
         testRiskAssessment.setRiskScore(new BigDecimal("35.5"));
+
+        testReviewer = new AdminUser();
+        testReviewer.setId(200L);
+        testReviewer.setRealName("审核员A");
     }
 
     @Nested
@@ -196,6 +240,7 @@ class AdminApplicationServiceImplTest {
             when(userMapper.selectBatchIds(any())).thenReturn(List.of(testUser));
             when(riskAssessmentMapper.selectList(any(LambdaQueryWrapper.class)))
                     .thenReturn(List.of(testRiskAssessment));
+            when(adminUserMapper.selectBatchIds(any())).thenReturn(List.of(testReviewer));
 
             // Act
             Page<AdminApplicationVO> result = adminApplicationService.getApplicationList(queryDTO);
@@ -227,6 +272,7 @@ class AdminApplicationServiceImplTest {
             when(userMapper.selectBatchIds(any())).thenReturn(List.of(testUser));
             when(riskAssessmentMapper.selectList(any(LambdaQueryWrapper.class)))
                     .thenReturn(List.of(testRiskAssessment));
+            when(adminUserMapper.selectBatchIds(any())).thenReturn(List.of(testReviewer));
 
             // Act
             Page<AdminApplicationVO> result = adminApplicationService.getApplicationList(queryDTO);
@@ -282,6 +328,7 @@ class AdminApplicationServiceImplTest {
             when(userMapper.selectBatchIds(any())).thenReturn(List.of(testUser));
             when(riskAssessmentMapper.selectList(any(LambdaQueryWrapper.class)))
                     .thenReturn(List.of(testRiskAssessment));
+            when(adminUserMapper.selectBatchIds(any())).thenReturn(List.of(testReviewer));
 
             // Act
             Page<AdminApplicationVO> result = adminApplicationService.getApplicationList(queryDTO);

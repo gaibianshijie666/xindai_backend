@@ -30,7 +30,8 @@ public class EnterpriseRiskController {
     public Result<RiskAssessResultVO> assess(
             @RequestAttribute("enterpriseId") Long enterpriseId,
             @PathVariable Long customerId) {
-        return Result.success(riskService.assessCustomer(enterpriseId, customerId));
+        // 独立评估不关联申请，传null
+        return Result.success(riskService.assessCustomer(enterpriseId, customerId, null));
     }
 
     @Operation(summary = "批量评估客户风险")

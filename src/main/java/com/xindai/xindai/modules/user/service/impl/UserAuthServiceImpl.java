@@ -27,7 +27,7 @@ public class UserAuthServiceImpl implements UserAuthService {
     private final JwtUtils jwtUtils;
 
     @Override
-    @CacheEvict(value = {"userByPhone", "userById"}, allEntries = true)
+    @CacheEvict(value = "userByPhone", key = "#dto.phone")
     public UserVO register(UserRegisterDTO dto) {
         // 检查手机号是否已注册
         User existUser = userProfileService.getByPhone(dto.getPhone());
@@ -46,7 +46,7 @@ public class UserAuthServiceImpl implements UserAuthService {
         String token = jwtUtils.generateToken(user.getId(), user.getPhone());
 
         log.info("User registered: userId={}, phone={}", user.getId(), user.getPhone());
-        return buildUserVO(user, token);
+        return UserVO.from(user, token);
     }
 
     @Override
@@ -66,7 +66,7 @@ public class UserAuthServiceImpl implements UserAuthService {
 
         String token = jwtUtils.generateToken(user.getId(), user.getPhone());
         log.info("User logged in: userId={}", user.getId());
-        return buildUserVO(user, token);
+        return UserVO.from(user, token);
     }
 
     @Override
@@ -74,16 +74,5 @@ public class UserAuthServiceImpl implements UserAuthService {
         // 使该用户的Token失效
         jwtUtils.invalidateToken(userId);
         log.info("User logged out: userId={}", userId);
-    }
-
-    private UserVO buildUserVO(User user, String token) {
-        UserVO vo = new UserVO();
-        vo.setId(user.getId());
-        vo.setPhone(user.getPhone());
-        vo.setRealName(user.getRealName());
-        vo.setIdCard(user.getIdCard());
-        vo.setStatus(user.getStatus());
-        vo.setToken(token);
-        return vo;
     }
 }

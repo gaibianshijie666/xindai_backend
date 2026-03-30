@@ -52,33 +52,32 @@ public class UserProfileServiceImpl implements UserProfileService {
         if (user == null) {
             throw new BusinessException(ErrorCode.USER_NOT_FOUND);
         }
-        return buildUserVO(user, null);
+        return UserVO.from(user, null);
     }
 
     @Override
-    @CacheEvict(value = {"userById", "userByPhone"}, allEntries = true)
+    @CacheEvict(value = "userById", key = "#userId")
     public UserVO updateProfile(Long userId, UserUpdateDTO dto) {
         User user = getById(userId);
         if (user == null) {
             throw new BusinessException(ErrorCode.USER_NOT_FOUND);
         }
 
-        // 更新用户信息
-        if (dto.getRealName() != null) {
-            user.setRealName(dto.getRealName());
-        }
-        if (dto.getIdCard() != null) {
-            user.setIdCard(dto.getIdCard());
-        }
+        // 安全措施：实名信息(realName, idCard)只能通过verifyIdentity()进行KYC验证后设置
+        // 不允许通过updateProfile()直接修改，防止KYC绕过攻击
+        // UserUpdateDTO中的realName和idCard字段已标记为READ_ONLY
+
+        // 注意：email, company, position, monthlyIncome字段属于user_profile表
+        // 此方法仅用于演示安全修复，完整的实现需要更新UserProfile实体
 
         userMapper.updateById(user);
 
         log.info("User profile updated: userId={}", userId);
-        return buildUserVO(user, null);
+        return UserVO.from(user, null);
     }
 
     @Override
-    @CacheEvict(value = {"userById", "userByPhone"}, allEntries = true)
+    @CacheEvict(value = "userById", key = "#userId")
     public void changePassword(Long userId, PasswordChangeDTO dto) {
         User user = getById(userId);
         if (user == null) {
@@ -101,7 +100,7 @@ public class UserProfileServiceImpl implements UserProfileService {
     }
 
     @Override
-    @CacheEvict(value = {"userById", "userByPhone"}, allEntries = true)
+    @CacheEvict(value = "userById", key = "#userId")
     public UserVO verifyIdentity(Long userId, VerifyIdentityDTO dto) {
         User user = getById(userId);
         if (user == null) {
@@ -135,18 +134,7 @@ public class UserProfileServiceImpl implements UserProfileService {
         }
 
         log.info("User identity verified: userId={}", userId);
-        return buildUserVO(user, null);
-    }
-
-    private UserVO buildUserVO(User user, String token) {
-        UserVO vo = new UserVO();
-        vo.setId(user.getId());
-        vo.setPhone(user.getPhone());
-        vo.setRealName(user.getRealName());
-        vo.setIdCard(user.getIdCard());
-        vo.setStatus(user.getStatus());
-        vo.setToken(token);
-        return vo;
+        return UserVO.from(user, null);
     }
 
     @Override

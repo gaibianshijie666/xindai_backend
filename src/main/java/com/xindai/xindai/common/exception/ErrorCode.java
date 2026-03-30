@@ -29,6 +29,7 @@ public enum ErrorCode {
     // 借贷模块 2xxx
     LOAN_NOT_FOUND(2001, "借款申请不存在"),
     LIMIT_INSUFFICIENT(2002, "可用额度不足"),
+    LIMIT_NOT_FOUND(2016, "用户额度记录不存在"),
     APPLICATION_NOT_FOUND(2003, "申请不存在"),
     APPLICATION_ALREADY_REVIEWED(2004, "申请已审核"),
     CONTRACT_NOT_FOUND(2005, "合同不存在"),
@@ -45,6 +46,7 @@ public enum ErrorCode {
 
     // 风控模块 3xxx
     RISK_ASSESSMENT_FAILED(3001, "风险评估失败"),
+    RISK_ASSESSMENT_NOT_FOUND(3006, "风险评估记录不存在"),
     IN_BLACKLIST(3002, "用户在黑名单中"),
     BLACKLIST_ALREADY_EXISTS(3003, "黑名单记录已存在"),
     BLACKLIST_NOT_FOUND(3004, "黑名单记录不存在"),
@@ -63,6 +65,10 @@ public enum ErrorCode {
     ENTERPRISE_CUSTOMER_EXISTS(4006, "企业客户已存在"),
     ENTERPRISE_CREDIT_APPLY_PENDING(4007, "存在待审批的额度申请"),
     ENTERPRISE_CREDIT_APPLY_REJECTED(4008, "额度申请被拒绝，请30天后重试"),
+
+    // 管理员模块 7xxx
+    ADMIN_NOT_FOUND(7001, "管理员不存在"),
+    ADMIN_USERNAME_EXISTS(7002, "管理员用户名已存在"),
 
     // AI助手模块 5xxx
     AGENT_DISABLED(5001, "AI助手功能未启用"),

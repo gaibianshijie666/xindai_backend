@@ -1,6 +1,5 @@
 package com.xindai.xindai.listener;
 
-import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.xindai.xindai.common.constants.QueueConstants;
 import com.xindai.xindai.common.event.RiskAssessmentCompletedEvent;
 import com.xindai.xindai.modules.loan.entity.LoanApplication;
@@ -14,11 +13,12 @@ import org.springframework.amqp.support.AmqpHeaders;
 import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDateTime;
-
 /**
  * 风险评估完成事件监听器
- * 根据风险等级自动审批或拒绝借款申请
+ *
+ * NOTE: The synchronous risk assessment in LoanServiceImpl.apply() is the primary flow.
+ * This listener is kept for edge cases and logging only, to avoid duplicate processing.
+ * The loan application status is already set by the synchronous call in LoanServiceImpl.
  */
 @Slf4j
 @Component
@@ -33,8 +33,8 @@ public class ApplicationStatusListener {
                                           @Header(AmqpHeaders.DELIVERY_TAG) long tag) {
         try {
             log.info("Received event: {}, eventId: {}", event.getClass().getSimpleName(), event.getEventId());
-            log.info("Processing risk assessment result: applicationId={}, riskLevel={}",
-                    event.getApplicationId(), event.getRiskLevel());
+            log.info("Risk assessment completed: applicationId={}, riskLevel={}, riskScore={}",
+                    event.getApplicationId(), event.getRiskLevel(), event.getRiskScore());
 
             LoanApplication application = loanApplicationMapper.selectById(event.getApplicationId());
             if (application == null) {
@@ -43,48 +43,28 @@ public class ApplicationStatusListener {
                 return;
             }
 
-            String riskLevel = event.getRiskLevel();
-            String reviewNote;
-            int newStatus;
+            // Log the current application status for monitoring/troubleshooting
+            // The actual status change was already done synchronously in LoanServiceImpl.apply()
+            ApplicationStatus currentStatus = ApplicationStatus.fromCode(application.getStatus());
+            log.info("Current application status: applicationId={}, status={}, statusDesc={}",
+                    event.getApplicationId(), application.getStatus(), currentStatus.getDesc());
 
-            switch (riskLevel) {
-                case "LOW":
-                    newStatus = ApplicationStatus.APPROVED.getCode();
-                    reviewNote = "自动审批通过（低风险）";
-                    break;
-                case "MEDIUM":
-                    newStatus = ApplicationStatus.APPROVED.getCode();
-                    reviewNote = "自动审批通过（中风险）";
-                    break;
-                case "HIGH":
-                    newStatus = ApplicationStatus.REJECTED.getCode();
-                    reviewNote = "自动拒绝（高风险）";
-                    break;
-                default:
-                    log.warn("Unknown risk level: {} for applicationId={}, skipping auto-review",
-                            riskLevel, event.getApplicationId());
-                    channel.basicAck(tag, false);
-                    return;
+            // Edge case handling: if the application is still in PENDING status after
+            // the synchronous processing, it means the risk assessment failed
+            if (application.getStatus() == ApplicationStatus.PENDING.getCode()) {
+                log.warn("Application still in PENDING status after risk assessment completed: " +
+                        "applicationId={}, this may indicate a processing failure",
+                        event.getApplicationId());
+                // The application will remain in PENDING for manual review
             }
 
-            LambdaUpdateWrapper<LoanApplication> wrapper = new LambdaUpdateWrapper<>();
-            wrapper.eq(LoanApplication::getId, event.getApplicationId())
-                    .set(LoanApplication::getStatus, newStatus)
-                    .set(LoanApplication::getReviewerId, null)
-                    .set(LoanApplication::getReviewNote, reviewNote)
-                    .set(LoanApplication::getReviewedAt, LocalDateTime.now());
-
-            loanApplicationMapper.update(null, wrapper);
-            log.info("Auto-reviewed loan application: applicationId={}, action={}, riskLevel={}",
-                    event.getApplicationId(),
-                    newStatus == ApplicationStatus.APPROVED.getCode() ? "APPROVED" : "REJECTED",
-                    riskLevel);
-
+            // Acknowledge message - we've logged what we needed
             channel.basicAck(tag, false);
+
         } catch (Exception e) {
             log.error("Failed to process event: {}", event.getEventId(), e);
             try {
-                channel.basicNack(tag, false, true);
+                channel.basicNack(tag, false, false); // Don't requeue to avoid duplicate processing
             } catch (Exception ex) {
                 log.error("Failed to NACK message", ex);
             }

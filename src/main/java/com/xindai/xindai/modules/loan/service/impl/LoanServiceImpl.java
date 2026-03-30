@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.xindai.xindai.client.model.CreditLimitPredictionClient;
 import com.xindai.xindai.common.constants.CreditLimitConstants;
 import com.xindai.xindai.common.event.EventPublisher;
+import com.xindai.xindai.common.event.LoanApplicationApprovedEvent;
 import com.xindai.xindai.common.event.LoanApplicationSubmittedEvent;
 import com.xindai.xindai.common.event.RepaymentCompletedEvent;
 import com.xindai.xindai.common.exception.BusinessException;
@@ -25,6 +26,7 @@ import com.xindai.xindai.modules.loan.mapper.LoanApplicationMapper;
 import com.xindai.xindai.modules.loan.mapper.LoanContractMapper;
 import com.xindai.xindai.modules.loan.mapper.RepaymentPlanMapper;
 import com.xindai.xindai.modules.loan.service.CreditLimitCalculator;
+import com.xindai.xindai.modules.loan.service.CreditLimitService;
 import com.xindai.xindai.modules.loan.service.LoanService;
 import com.xindai.xindai.modules.notification.service.NotificationService;
 import com.xindai.xindai.modules.risk.entity.RiskAssessment;
@@ -59,6 +61,7 @@ public class LoanServiceImpl implements LoanService {
     private final UserProfileMapper userProfileMapper;
     private final RiskAssessmentService riskAssessmentService;
     private final CreditLimitCalculator creditLimitCalculator;
+    private final CreditLimitService creditLimitService;
     private final CreditLimitPredictionClient limitPredictionClient;
     private final CacheManager cacheManager;
     private final CreditLimitProperties creditLimitProperties;
@@ -112,8 +115,14 @@ public class LoanServiceImpl implements LoanService {
             // 根据评估结果自动决策
             if ("APPROVE".equals(assessment.getDecision())) {
                 application.setStatus(ApplicationStatus.APPROVED.getCode()); // 自动通过
-                log.info("Loan application auto-approved: applicationId={}, riskScore={}",
-                        application.getId(), assessment.getRiskScore());
+                // 扣减额度
+                creditLimitService.deductLimit(userId, dto.getAmount());
+                log.info("Loan application auto-approved: applicationId={}, riskScore={}, amount deducted={}",
+                        application.getId(), assessment.getRiskScore(), dto.getAmount());
+                // 发布审批通过事件，触发合同生成和放款流程
+                eventPublisher.publish(new LoanApplicationApprovedEvent(
+                        application.getId(), userId, dto.getAmount(), dto.getAmount(), "自动审批通过"
+                ));
             } else if ("REJECT".equals(assessment.getDecision())) {
                 application.setStatus(ApplicationStatus.REJECTED.getCode()); // 自动拒绝
                 log.info("Loan application auto-rejected: applicationId={}, riskScore={}",
@@ -590,11 +599,13 @@ public class LoanServiceImpl implements LoanService {
             throw new BusinessException(ErrorCode.CONTRACT_ALREADY_SETTLED);
         }
 
-        // 获取待还款计划
+        // 获取待还款计划（包含待还款和已逾期状态）
         List<RepaymentPlan> pendingPlans = repaymentPlanMapper.selectList(
                 new LambdaQueryWrapper<RepaymentPlan>()
                         .eq(RepaymentPlan::getContractId, dto.getContractId())
-                        .eq(RepaymentPlan::getStatus, RepaymentStatus.PENDING.getCode())
+                        .in(RepaymentPlan::getStatus,
+                            RepaymentStatus.PENDING.getCode(),
+                            RepaymentStatus.OVERDUE.getCode())
                         .orderByAsc(RepaymentPlan::getPeriod)
         );
 
@@ -634,8 +645,15 @@ public class LoanServiceImpl implements LoanService {
             throw new BusinessException(ErrorCode.REPAYMENT_ALREADY_PAID);
         }
 
+        // 计算需要还款的金额（逾期计划需要包含罚息）
+        BigDecimal requiredAmount = plan.getTotalAmount();
+        boolean isOverdue = plan.getStatus().equals(RepaymentStatus.OVERDUE.getCode());
+        if (isOverdue && plan.getPenaltyAmount() != null) {
+            requiredAmount = requiredAmount.add(plan.getPenaltyAmount());
+        }
+
         List<RepaymentPlan> plans = List.of(plan);
-        return executeRepayment(contract, plans, plan.getTotalAmount());
+        return executeRepayment(contract, plans, requiredAmount);
     }
 
     private RepaymentResultVO executeRepayment(LoanContract contract, List<RepaymentPlan> pendingPlans, BigDecimal amount) {
@@ -645,7 +663,14 @@ public class LoanServiceImpl implements LoanService {
         BigDecimal totalRepaid = BigDecimal.ZERO;
 
         for (RepaymentPlan plan : pendingPlans) {
-            if (remainingAmount.compareTo(plan.getTotalAmount()) >= 0) {
+            // 计算本期需要还款的总金额（逾期计划需要包含罚息）
+            BigDecimal requiredAmount = plan.getTotalAmount();
+            boolean isOverdue = plan.getStatus().equals(RepaymentStatus.OVERDUE.getCode());
+            if (isOverdue && plan.getPenaltyAmount() != null) {
+                requiredAmount = requiredAmount.add(plan.getPenaltyAmount());
+            }
+
+            if (remainingAmount.compareTo(requiredAmount) >= 0) {
                 // 足够还清这一期
                 plan.setStatus(RepaymentStatus.PAID.getCode()); // 已还款
                 plan.setPaidAt(LocalDateTime.now());
@@ -653,12 +678,12 @@ public class LoanServiceImpl implements LoanService {
 
                 RepaymentResultVO.RepaidPeriod repaidPeriod = new RepaymentResultVO.RepaidPeriod();
                 repaidPeriod.setPeriod(plan.getPeriod());
-                repaidPeriod.setAmount(plan.getTotalAmount());
+                repaidPeriod.setAmount(requiredAmount);
                 repaidPeriod.setPaidAt(plan.getPaidAt().toString());
                 repaidPeriods.add(repaidPeriod);
 
-                remainingAmount = remainingAmount.subtract(plan.getTotalAmount());
-                totalRepaid = totalRepaid.add(plan.getTotalAmount());
+                remainingAmount = remainingAmount.subtract(requiredAmount);
+                totalRepaid = totalRepaid.add(requiredAmount);
             } else {
                 // 金额不足，停止还款
                 break;
@@ -712,19 +737,11 @@ public class LoanServiceImpl implements LoanService {
     }
 
     private void recoverCreditLimit(Long userId, BigDecimal amount) {
-        CreditLimit limit = creditLimitMapper.selectOne(
-                new LambdaQueryWrapper<CreditLimit>().eq(CreditLimit::getUserId, userId)
-        );
-
-        if (limit != null) {
-            limit.setUsedLimit(limit.getUsedLimit().subtract(amount));
-            if (limit.getUsedLimit().compareTo(BigDecimal.ZERO) < 0) {
-                limit.setUsedLimit(BigDecimal.ZERO);
-            }
-            limit.setAvailableLimit(limit.getTotalLimit().subtract(limit.getUsedLimit()));
-            creditLimitMapper.updateById(limit);
-            evictCreditLimitCache(userId);
-            log.info("Recovered credit limit for user {}: +{}", userId, amount);
+        try {
+            creditLimitService.recoverLimit(userId, amount);
+        } catch (Exception e) {
+            log.error("Failed to recover credit limit for user {}: {}", userId, e.getMessage(), e);
+            // 不抛出异常，避免影响还款成功的主流程
         }
     }
 
